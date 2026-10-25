@@ -47,15 +47,43 @@ Go to **Settings -> Keyboard -> Keyboard Shortcuts -> Custom Shortcuts -> Add**:
 
 ---
 
-## Adding More Tools (100% Python)
-To add a new tool (e.g. Gmail unread check, Google Calendar, web search), simply open `backend/tools.py`, write a Python function with type hints and a docstring, and add it to `TOOLS`:
+## Adding More Tools
 
+Gemini never sees your function body. It only sees the **name**, the **type-hinted signature**, and the **docstring**. The docstring is effectively the prompt for the tool, so write it for the model, not for humans.
+
+### Steps
+1. Write a plain Python function in `backend/tools.py`.
+2. Add it to `TOOLS`. The SDK runs the call loop automatically.
+
+### Rules
+- **Name**: verb-first and specific (`add_task`, `check_unread_emails`). The model uses it to decide *when* to call.
+- **Type hints on every param**: they become the schema. Stick to `str`, `int`, `float`, `bool`, `list[str]`. No custom classes.
+- **Defaults = optional**: a param with no default is required, so the model must supply it. Use `""` as the "not given" sentinel.
+- **Docstring, first line**: what the tool does and when to use it.
+- **`Args:` block**: for every param, give the exact format and allowed values, plus an example. This is where the model learns `"YYYY-MM-DDTHH:MM"` or `"none" | "low" | "medium" | "high"`. Vague args produce malformed calls.
+- **Constraints between params**: state them (e.g. "a repeating task must also have a due date").
+- **Return a dict** with `status` (`"ok"` / `"error"`) and a `message`. Never raise; return the error so the model can explain it to the user.
+- **Validate inputs yourself**: the model can still send bad values. Return a descriptive error and the model will usually retry with a corrected call.
+
+### Example
 ```python
-def check_unread_emails(limit: int = 5) -> dict:
-    """Check recent unread emails in Gmail inbox."""
-    # your python logic here
-    return {"status": "ok", "emails": [...]}
+def add_task(
+    title: str,
+    due: str = "",
+    priority: str = "none",
+) -> dict:
+    """Create a task or reminder in TickTick.
 
-TOOLS = [add_task, check_unread_emails]
+    Args:
+        title: Short task title, e.g. "Call the vendor".
+        due: "YYYY-MM-DDTHH:MM" (24h) if a time is given, "YYYY-MM-DD" if only
+            a day is given, empty string if no date was mentioned.
+        priority: One of "none", "low", "medium", "high".
+
+    Returns:
+        A dict with status "ok" or "error" and a message.
+    """
+    ...
+
+TOOLS = [add_task]
 ```
-Gemini automatically learns how and when to call your tool.
