@@ -7,7 +7,7 @@ backend_dir = Path(__file__).resolve().parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-import llm
+from core import llm
 
 
 def run_prompt(prompt: str) -> str:
