@@ -43,8 +43,17 @@
 
       <!-- Footer Help Hint -->
       <div class="content-footer" id="content-footer">
-        <span class="footer-tip">Esc to dismiss &bull; Ctrl+L to clear</span>
+        <span class="footer-tip">Esc dismiss &bull; Ctrl+H history &bull; Ctrl+L clear</span>
       </div>
+    </div>
+
+    <!-- History Drawer Overlay (Ctrl + H) -->
+    <div class="history-drawer hidden" id="history-drawer">
+      <div class="drawer-header">
+        <span class="drawer-title">Chat History</span>
+        <button class="drawer-close" id="btn-close-drawer" title="Close (Esc)">&#x2715;</button>
+      </div>
+      <div class="history-list" id="history-list"></div>
     </div>
   </div>
 

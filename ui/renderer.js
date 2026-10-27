@@ -4,6 +4,9 @@ const badgeText = document.getElementById('badge-text');
 const barContainer = document.getElementById('bar-container');
 const dynamicContent = document.getElementById('dynamic-content');
 const chatStream = document.getElementById('chat-stream');
+const historyDrawer = document.getElementById('history-drawer');
+const historyList = document.getElementById('history-list');
+const btnCloseDrawer = document.getElementById('btn-close-drawer');
 
 let isBusy = false;
 let isExpanded = false;
@@ -293,9 +296,99 @@ async function submitTask() {
   }
 }
 
+// History Drawer (Ctrl + H)
+async function toggleHistoryDrawer() {
+  if (historyDrawer.classList.contains('hidden')) {
+    expandWindow();
+    historyDrawer.classList.remove('hidden');
+    historyList.innerHTML = '<div style="color: #64748b; font-size: 12px; padding: 12px;">Loading chat history...</div>';
+
+    try {
+      const sessions = await window.ghostAPI.listSessions();
+      historyList.innerHTML = '';
+
+      if (!sessions || sessions.length === 0) {
+        historyList.innerHTML = '<div style="color: #64748b; font-size: 12px; padding: 12px;">No past conversations found.</div>';
+        return;
+      }
+
+      sessions.forEach((sess) => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+          <div class="history-item-left">
+            <span class="history-item-title">${escapeHtml(sess.title)}</span>
+            <span class="history-item-date">${escapeHtml(sess.date)}</span>
+          </div>
+          <span class="history-item-count">${sess.turn_count || 1} turns</span>
+        `;
+        item.addEventListener('click', () => {
+          resumeSession(sess.id);
+        });
+        historyList.appendChild(item);
+      });
+    } catch (err) {
+      historyList.innerHTML = `<div style="color: #f87171; font-size: 12px; padding: 12px;">Error loading history: ${escapeHtml(err.message)}</div>`;
+    }
+  } else {
+    historyDrawer.classList.add('hidden');
+    input.focus();
+  }
+}
+
+if (btnCloseDrawer) {
+  btnCloseDrawer.addEventListener('click', () => {
+    historyDrawer.classList.add('hidden');
+    input.focus();
+  });
+}
+
+async function resumeSession(sessionId) {
+  try {
+    const sessionData = await window.ghostAPI.loadSession(sessionId);
+    if (!sessionData || !Array.isArray(sessionData.turns)) return;
+
+    chatStream.innerHTML = '';
+    historyDrawer.classList.add('hidden');
+
+    sessionData.turns.forEach((turn) => {
+      if (turn.role === 'user') {
+        appendUserMessage(turn.text);
+      } else {
+        let data;
+        try {
+          data = JSON.parse(turn.text);
+        } catch {
+          data = { display: 'line', body: turn.text };
+        }
+        appendGhostMessage(data);
+      }
+    });
+
+    expandWindow();
+    input.value = '';
+    input.placeholder = `Continuing "${sessionData.title || 'chat'}"... (Esc to dismiss)`;
+    setTimeout(() => input.focus(), 40);
+  } catch (err) {
+    console.error('Failed to resume session:', err);
+  }
+}
+
 // Global Keyboard Navigation
 window.addEventListener('keydown', (e) => {
+  // Ctrl+H or Cmd+H to toggle chat history
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
+    e.preventDefault();
+    toggleHistoryDrawer();
+    return;
+  }
+
   if (e.key === 'Escape') {
+    if (!historyDrawer.classList.contains('hidden')) {
+      historyDrawer.classList.add('hidden');
+      input.focus();
+      return;
+    }
     window.ghostAPI?.closeWindow?.();
     resetState();
     return;
@@ -304,6 +397,7 @@ window.addEventListener('keydown', (e) => {
   // Ctrl+L or Cmd+L to clear chat and collapse back to single line
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
     e.preventDefault();
+    historyDrawer.classList.add('hidden');
     window.ghostAPI?.runPrompt?.('/clear');
     resetState();
     return;
