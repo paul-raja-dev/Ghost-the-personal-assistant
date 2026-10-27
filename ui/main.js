@@ -1,13 +1,15 @@
 const { app, BrowserWindow, ipcMain, screen, Menu, MenuItem } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { spawn } = require('child_process');
 
-// Required for Ubuntu 24.04 unprivileged user namespaces
+// Required for Ubuntu 24.04 unprivileged user namespaces and Wayland coordinate positioning
 app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('ozone-platform', 'x11');
 
 let mainWindow = null;
-const stateFile = path.join(app.getPath('userData'), 'window-state.json');
+const stateFile = path.join(os.homedir(), '.config', 'ghost', 'window-state.json');
 
 function loadWindowState() {
   try {
@@ -22,7 +24,7 @@ function saveWindowState() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   try {
     const [x, y] = mainWindow.getPosition();
-    if (x > 10 || y > 10) {
+    if (x > 10 && y > 10) {
       fs.mkdirSync(path.dirname(stateFile), { recursive: true });
       fs.writeFileSync(stateFile, JSON.stringify({ x, y }));
     }
@@ -69,6 +71,10 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
+  let isWindowInitialized = false;
+  let isMaximizedBySnap = false;
+  let preSnapBounds = null;
+
   mainWindow.once('ready-to-show', () => {
     // Explicitly apply coordinates so Linux WM does not force top-left
     mainWindow.setPosition(x, y);
@@ -79,15 +85,13 @@ function createWindow() {
     setTimeout(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.setPosition(x, y);
+        isWindowInitialized = true;
       }
-    }, 60);
+    }, 150);
   });
 
-  let isMaximizedBySnap = false;
-  let preSnapBounds = null;
-
   mainWindow.on('moved', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow || mainWindow.isDestroyed() || !isWindowInitialized) return;
     const [currentX, currentY] = mainWindow.getPosition();
     const primaryDisplay = screen.getPrimaryDisplay();
     const { workArea } = primaryDisplay;
@@ -114,7 +118,7 @@ function createWindow() {
       return;
     }
 
-    if (!isMaximizedBySnap) {
+    if (!isMaximizedBySnap && currentX > 10 && currentY > 10) {
       saveWindowState();
     }
   });

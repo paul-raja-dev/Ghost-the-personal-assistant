@@ -19,5 +19,6 @@ if [ $# -gt 0 ]; then
   exec .venv/bin/python backend/main.py "$@"
 else
   # --no-sandbox is required on Ubuntu 24.04 due to kernel unprivileged userns restrictions
-  exec "$DIR/node_modules/.bin/electron" "$DIR" --no-sandbox "$@"
+  # --ozone-platform=x11 ensures GNOME/Wayland window managers respect explicit (x, y) coordinates
+  exec "$DIR/node_modules/.bin/electron" "$DIR" --no-sandbox --ozone-platform=x11 "$@"
 fi
