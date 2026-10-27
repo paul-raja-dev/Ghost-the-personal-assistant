@@ -196,7 +196,17 @@ body {
   font-size: 13.5px;
   line-height: 1.45;
   word-break: break-word;
-  user-select: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.chat-bubble *,
+.chat-text,
+.widget-item-label,
+.widget-item-detail,
+.widget-compose-body {
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .chat-bubble.user {
