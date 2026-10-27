@@ -65,21 +65,22 @@ def _clean_response(raw_text: str) -> str:
         if isinstance(data, dict):
             if "display" in data:
                 return json.dumps(data, ensure_ascii=False)
-            # If model returned a raw dict (e.g. memories dump), convert to list envelope
+            # If model returned a raw dict (e.g. memories dump or tool result), convert to list envelope
             items = []
-            if "memories" in data and isinstance(data["memories"], dict):
-                for cat, mems in data["memories"].items():
+            source_dict = data.get("categories") or data.get("memories") or data.get("data")
+            if isinstance(source_dict, dict):
+                for cat, mems in source_dict.items():
                     if isinstance(mems, list):
                         for m in mems:
                             items.append({
-                                "label": m.get("content", ""),
+                                "label": m.get("content", str(m)),
                                 "detail": cat,
                                 "badge": m.get("id", "")
                             })
             return json.dumps({
                 "display": "list" if items else "line",
-                "title": "Memories",
-                "body": f"Found {len(items)} saved memories." if items else "No memories found.",
+                "title": data.get("title", "Saved Memories" if items else "Result"),
+                "body": f"Found {len(items)} items." if items else (data.get("message") or "No items found."),
                 "items": items,
                 "actions": [],
                 "auto_close": False if items else True,
@@ -122,13 +123,13 @@ def run(prompt: str) -> str:
         return json.dumps(err)
 
     candidate_models = []
-    for m in [config.GEMINI_MODEL, "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash"]:
+    for m in [config.GEMINI_MODEL, "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]:
         if m and m not in candidate_models:
             candidate_models.append(m)
 
     client = genai.Client(
         api_key=config.GEMINI_API_KEY,
-        http_options=types.HttpOptions(timeout=60_000),
+        http_options=types.HttpOptions(timeout=10_000),
     )
 
     last_exc = None

@@ -10,7 +10,7 @@ load_dotenv(BASE / ".env", override=True)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # Model names change often on the free tier. If you get a "model not found" error,
 # open Google AI Studio, pick a current Flash model, and put its name in .env.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 TZ_NAME = os.getenv("TIMEZONE", "Asia/Kolkata")
 
