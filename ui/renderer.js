@@ -307,7 +307,6 @@ async function toggleHistoryDrawer() {
             <span class="history-item-title">${escapeHtml(sess.title)}</span>
             <span class="history-item-date">${escapeHtml(sess.date)}</span>
           </div>
-          <span class="history-item-count">${sess.turn_count || 1} turns</span>
         `;
         item.addEventListener('click', () => {
           resumeSession(sess.id);
