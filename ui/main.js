@@ -33,7 +33,7 @@ function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
   const width = 580;
-  const height = 112;
+  const height = 64;
 
   const defaultX = Math.round((screenWidth - width) / 2);
   const defaultY = Math.round(screenHeight / 4);
@@ -48,13 +48,15 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: width,
     height: height,
+    minWidth: 420,
+    minHeight: 52,
     x: x,
     y: y,
     frame: false,
     transparent: true,
     alwaysOnTop: true,
     skipTaskbar: true,
-    resizable: false,
+    resizable: true,
     movable: true,
     show: false,
     backgroundColor: '#00000000',
@@ -70,6 +72,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     // Explicitly apply coordinates so Linux WM does not force top-left
     mainWindow.setPosition(x, y);
+    mainWindow.setSize(width, 64);
     mainWindow.show();
     mainWindow.focus();
 
@@ -80,8 +83,40 @@ function createWindow() {
     }, 60);
   });
 
+  let isMaximizedBySnap = false;
+  let preSnapBounds = null;
+
   mainWindow.on('moved', () => {
-    saveWindowState();
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const [currentX, currentY] = mainWindow.getPosition();
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { workArea } = primaryDisplay;
+
+    // Check if dragged to the top boundary (currentY <= workArea.y + 5)
+    if (currentY <= workArea.y + 5 && !isMaximizedBySnap) {
+      isMaximizedBySnap = true;
+      preSnapBounds = mainWindow.getBounds();
+      mainWindow.setBounds({
+        x: workArea.x,
+        y: workArea.y,
+        width: workArea.width,
+        height: workArea.height,
+      });
+      return;
+    }
+
+    // Check if dragged away from top when snapped
+    if (isMaximizedBySnap && currentY > workArea.y + 30) {
+      isMaximizedBySnap = false;
+      if (preSnapBounds) {
+        mainWindow.setBounds(preSnapBounds);
+      }
+      return;
+    }
+
+    if (!isMaximizedBySnap) {
+      saveWindowState();
+    }
   });
 
   mainWindow.webContents.on('context-menu', (event, params) => {
