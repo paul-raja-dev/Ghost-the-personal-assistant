@@ -7,35 +7,80 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="bar-container" id="bar-container">
-    <div class="drag-handle" title="Drag to move">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="9" cy="6" r="1.5" fill="currentColor"></circle>
-        <circle cx="15" cy="6" r="1.5" fill="currentColor"></circle>
-        <circle cx="9" cy="12" r="1.5" fill="currentColor"></circle>
-        <circle cx="15" cy="12" r="1.5" fill="currentColor"></circle>
-        <circle cx="9" cy="18" r="1.5" fill="currentColor"></circle>
-        <circle cx="15" cy="18" r="1.5" fill="currentColor"></circle>
-      </svg>
+  <div class="palette-wrapper">
+    <!-- Single Top Command Bar -->
+    <div class="bar-container" id="bar-container">
+      <div class="drag-handle" title="Drag to move">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="9" cy="6" r="1.5" fill="currentColor"></circle>
+          <circle cx="15" cy="6" r="1.5" fill="currentColor"></circle>
+          <circle cx="9" cy="12" r="1.5" fill="currentColor"></circle>
+          <circle cx="15" cy="12" r="1.5" fill="currentColor"></circle>
+          <circle cx="9" cy="18" r="1.5" fill="currentColor"></circle>
+          <circle cx="15" cy="18" r="1.5" fill="currentColor"></circle>
+        </svg>
+      </div>
+
+      <input 
+        type="text" 
+        id="command-input" 
+        placeholder="Tell me what to do" 
+        autocomplete="off" 
+        spellcheck="false" 
+        autofocus
+      />
+
+      <div class="action-badge" id="action-badge">
+        <span id="badge-text">&gt;</span>
+      </div>
     </div>
 
-    <input 
-      type="text" 
-      id="command-input" 
-      placeholder="Tell me what to do" 
-      autocomplete="off" 
-      spellcheck="false" 
-      autofocus
-    />
+    <!-- Dynamic Content Area -->
+    <div class="dynamic-content hidden" id="dynamic-content">
+      <!-- Line Mode View -->
+      <div class="view-line hidden" id="view-line">
+        <span class="status-marker" id="line-marker">&gt;</span>
+        <span class="line-text" id="line-text"></span>
+      </div>
 
-    <div class="action-badge" id="action-badge">
-      <span id="badge-text">⏎</span>
+      <!-- List Mode View -->
+      <div class="view-list hidden" id="view-list">
+        <div class="view-header">
+          <span class="view-title" id="list-title">Items</span>
+          <span class="view-meta" id="list-meta"></span>
+        </div>
+        <div class="list-scroll" id="list-items"></div>
+      </div>
+
+      <!-- Compose Mode View -->
+      <div class="view-compose hidden" id="view-compose">
+        <div class="view-header">
+          <span class="view-title" id="compose-title">Draft</span>
+        </div>
+        <textarea id="compose-body" spellcheck="false"></textarea>
+        <div class="compose-actions">
+          <button class="btn btn-primary" id="btn-compose-send">Copy to clipboard</button>
+          <button class="btn btn-secondary" id="btn-compose-cancel">Dismiss</button>
+        </div>
+      </div>
+
+      <!-- Confirm Mode View -->
+      <div class="view-confirm hidden" id="view-confirm">
+        <div class="view-header">
+          <span class="view-title" id="confirm-title">Confirmation Required</span>
+        </div>
+        <div class="confirm-body" id="confirm-body"></div>
+        <div class="confirm-actions">
+          <button class="btn btn-danger" id="btn-confirm-ok">Confirm</button>
+          <button class="btn btn-secondary" id="btn-confirm-cancel">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Footer Help Hint -->
+      <div class="content-footer" id="content-footer">
+        <span class="footer-tip">Esc to dismiss</span>
+      </div>
     </div>
-  </div>
-
-  <!-- Subtle slide-down result strip -->
-  <div class="result-strip hidden" id="result-strip">
-    <span class="result-text" id="result-text"></span>
   </div>
 
   <script src="renderer.js"></script>
