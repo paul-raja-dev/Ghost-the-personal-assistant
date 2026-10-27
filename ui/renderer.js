@@ -2,50 +2,41 @@ const input = document.getElementById('command-input');
 const badge = document.getElementById('action-badge');
 const badgeText = document.getElementById('badge-text');
 const barContainer = document.getElementById('bar-container');
-
-// Dynamic containers
 const dynamicContent = document.getElementById('dynamic-content');
-const viewLine = document.getElementById('view-line');
-const lineMarker = document.getElementById('line-marker');
-const lineText = document.getElementById('line-text');
-
-const viewList = document.getElementById('view-list');
-const listTitle = document.getElementById('list-title');
-const listMeta = document.getElementById('list-meta');
-const listItems = document.getElementById('list-items');
-
-const viewCompose = document.getElementById('view-compose');
-const composeTitle = document.getElementById('compose-title');
-const composeBody = document.getElementById('compose-body');
-const btnComposeSend = document.getElementById('btn-compose-send');
-const btnComposeCancel = document.getElementById('btn-compose-cancel');
-
-const viewConfirm = document.getElementById('view-confirm');
-const confirmTitle = document.getElementById('confirm-title');
-const confirmBody = document.getElementById('confirm-body');
-const btnConfirmOk = document.getElementById('btn-confirm-ok');
-const btnConfirmCancel = document.getElementById('btn-confirm-cancel');
+const chatStream = document.getElementById('chat-stream');
 
 let isBusy = false;
-let autoCloseTimer = null;
-let currentItems = [];
-let selectedIndex = 0;
+let isExpanded = false;
 
-function hideAllViews() {
-  viewLine.classList.add('hidden');
-  viewList.classList.add('hidden');
-  viewCompose.classList.add('hidden');
-  viewConfirm.classList.add('hidden');
-  dynamicContent.classList.add('hidden');
-  if (autoCloseTimer) {
-    clearTimeout(autoCloseTimer);
-    autoCloseTimer = null;
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text || '';
+  return div.innerHTML;
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    chatStream.scrollTop = chatStream.scrollHeight;
+  });
+}
+
+function expandWindow() {
+  if (!isExpanded) {
+    isExpanded = true;
+    dynamicContent.classList.remove('hidden');
+    window.ghostAPI?.setWindowHeight?.(420, true);
   }
 }
 
+function collapseWindow() {
+  isExpanded = false;
+  dynamicContent.classList.add('hidden');
+  chatStream.innerHTML = '';
+  window.ghostAPI?.setWindowHeight?.(64, true);
+}
+
 function resetState() {
-  hideAllViews();
-  window.ghostAPI?.setWindowHeight?.(64);
+  collapseWindow();
   input.value = '';
   input.disabled = false;
   input.placeholder = 'Tell me what to do...';
@@ -53,15 +44,13 @@ function resetState() {
   badge.classList.remove('active');
   badgeText.textContent = '>';
   isBusy = false;
-  currentItems = [];
-  selectedIndex = 0;
   setTimeout(() => input.focus(), 40);
 }
 
-// Reset when hotkey summons Ghost
+// Keep focus when hotkey summons Ghost
 if (window.ghostAPI?.onResetFocus) {
   window.ghostAPI.onResetFocus(() => {
-    resetState();
+    input.focus();
   });
 }
 
@@ -71,10 +60,6 @@ window.addEventListener('mouseup', () => {
 });
 
 input.addEventListener('input', () => {
-  if (autoCloseTimer) {
-    clearTimeout(autoCloseTimer);
-    autoCloseTimer = null;
-  }
   const query = input.value.trim();
   if (query.length > 0) {
     badge.classList.add('active');
@@ -83,176 +68,238 @@ input.addEventListener('input', () => {
   }
 });
 
-// Click action badge to submit
 badge.addEventListener('click', () => {
   if (!isBusy && input.value.trim()) {
     submitTask();
   }
 });
 
-function renderLine(data) {
-  hideAllViews();
-  const isErr = (data.title || '').toLowerCase().includes('error') || (data.body || '').toLowerCase().includes('error');
-  viewLine.className = isErr ? 'view-line error' : 'view-line';
-  lineMarker.textContent = isErr ? '[error]' : '>';
-  lineText.textContent = data.body || data.title || 'Done.';
+function appendUserMessage(text) {
+  const row = document.createElement('div');
+  row.className = 'chat-row user';
+  row.innerHTML = `<div class="chat-bubble user">${escapeHtml(text)}</div>`;
+  chatStream.appendChild(row);
+  scrollToBottom();
+}
 
-  viewLine.classList.remove('hidden');
-  dynamicContent.classList.remove('hidden');
-  window.ghostAPI?.setWindowHeight?.(108);
+function showTypingIndicator() {
+  const row = document.createElement('div');
+  row.className = 'chat-row ghost';
+  row.id = 'typing-row';
+  row.innerHTML = `
+    <span class="chat-avatar">&gt;</span>
+    <div class="chat-bubble ghost typing">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>
+  `;
+  chatStream.appendChild(row);
+  scrollToBottom();
+}
 
-  if (data.auto_close !== false) {
-    autoCloseTimer = setTimeout(() => {
-      window.ghostAPI?.closeWindow?.();
-      resetState();
-    }, 2400);
+function removeTypingIndicator() {
+  const typing = document.getElementById('typing-row');
+  if (typing) {
+    typing.remove();
   }
 }
 
-function renderList(data) {
-  hideAllViews();
-  listTitle.textContent = data.title || 'Results';
-  listMeta.textContent = `${(data.items || []).length} items`;
-  listItems.innerHTML = '';
+function appendGhostMessage(data) {
+  const row = document.createElement('div');
+  row.className = 'chat-row ghost';
 
-  currentItems = data.items || [];
-  selectedIndex = 0;
+  const avatar = document.createElement('span');
+  avatar.className = 'chat-avatar';
+  avatar.textContent = '>';
 
-  if (currentItems.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'list-item';
-    empty.innerHTML = `<span class="item-label">${data.body || 'No items found.'}</span>`;
-    listItems.appendChild(empty);
-  } else {
-    currentItems.forEach((item, idx) => {
-      const el = document.createElement('div');
-      el.className = idx === 0 ? 'list-item selected' : 'list-item';
-      el.innerHTML = `
-        <div class="item-left">
-          <span class="item-label">${escapeHtml(item.label || item.title || '')}</span>
-          ${item.detail ? `<span class="item-detail">${escapeHtml(item.detail)}</span>` : ''}
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble ghost';
+
+  const mode = data.display || 'line';
+  const bodyText = data.body || '';
+  const titleText = data.title || '';
+
+  // Main text line/body
+  if (bodyText) {
+    const textEl = document.createElement('div');
+    textEl.className = 'chat-text';
+    textEl.innerHTML = escapeHtml(bodyText).replace(/\n/g, '<br>');
+    bubble.appendChild(textEl);
+  } else if (titleText && mode === 'line') {
+    const textEl = document.createElement('div');
+    textEl.className = 'chat-text';
+    textEl.innerHTML = escapeHtml(titleText);
+    bubble.appendChild(textEl);
+  }
+
+  // 1. List Widget (for memories, search results, tasks)
+  if (mode === 'list' && Array.isArray(data.items) && data.items.length > 0) {
+    const listWidget = document.createElement('div');
+    listWidget.className = 'widget-list';
+
+    if (titleText) {
+      const header = document.createElement('div');
+      header.className = 'widget-title';
+      header.innerHTML = `<span>${escapeHtml(titleText)}</span><span class="widget-meta">${data.items.length} items</span>`;
+      listWidget.appendChild(header);
+    }
+
+    const itemsContainer = document.createElement('div');
+    itemsContainer.className = 'widget-list-items';
+
+    data.items.forEach((item) => {
+      const itemEl = document.createElement('div');
+      itemEl.className = 'widget-item';
+      itemEl.innerHTML = `
+        <div class="widget-item-left">
+          <span class="widget-item-label">${escapeHtml(item.label || item.title || '')}</span>
+          ${item.detail ? `<span class="widget-item-detail">${escapeHtml(item.detail)}</span>` : ''}
         </div>
-        ${item.badge ? `<span class="item-badge">${escapeHtml(item.badge)}</span>` : ''}
+        ${item.badge ? `<span class="widget-item-badge">${escapeHtml(item.badge)}</span>` : ''}
       `;
-      listItems.appendChild(el);
+      itemsContainer.appendChild(itemEl);
     });
+
+    listWidget.appendChild(itemsContainer);
+    bubble.appendChild(listWidget);
   }
 
-  viewList.classList.remove('hidden');
-  dynamicContent.classList.remove('hidden');
-  window.ghostAPI?.setWindowHeight?.(340);
-}
+  // 2. Compose Widget (email draft, note draft)
+  if (mode === 'compose') {
+    const composeWidget = document.createElement('div');
+    composeWidget.className = 'widget-compose';
 
-function renderCompose(data) {
-  hideAllViews();
-  composeTitle.textContent = data.title || 'Draft Content';
-  composeBody.value = data.body || '';
+    if (titleText) {
+      const header = document.createElement('div');
+      header.className = 'widget-title';
+      header.innerHTML = `<span>${escapeHtml(titleText)}</span>`;
+      composeWidget.appendChild(header);
+    }
 
-  viewCompose.classList.remove('hidden');
-  dynamicContent.classList.remove('hidden');
-  window.ghostAPI?.setWindowHeight?.(390);
-  setTimeout(() => composeBody.focus(), 50);
-}
+    const textarea = document.createElement('textarea');
+    textarea.className = 'widget-compose-body';
+    textarea.value = bodyText;
+    textarea.spellcheck = false;
 
-function renderConfirm(data) {
-  hideAllViews();
-  confirmTitle.textContent = data.title || 'Confirmation Required';
-  confirmBody.textContent = data.body || 'Do you want to proceed with this action?';
+    const actions = document.createElement('div');
+    actions.className = 'widget-actions';
 
-  viewConfirm.classList.remove('hidden');
-  dynamicContent.classList.remove('hidden');
-  window.ghostAPI?.setWindowHeight?.(240);
-}
+    const btnCopy = document.createElement('button');
+    btnCopy.className = 'btn btn-primary';
+    btnCopy.textContent = 'Copy to clipboard';
+    btnCopy.addEventListener('click', () => {
+      navigator.clipboard.writeText(textarea.value);
+      btnCopy.textContent = 'Copied!';
+      setTimeout(() => { btnCopy.textContent = 'Copy to clipboard'; }, 1500);
+    });
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+    actions.appendChild(btnCopy);
+    composeWidget.appendChild(textarea);
+    composeWidget.appendChild(actions);
+    bubble.appendChild(composeWidget);
+  }
+
+  // 3. Confirm Widget (file deletions, system actions)
+  if (mode === 'confirm') {
+    const confirmWidget = document.createElement('div');
+    confirmWidget.className = 'widget-confirm';
+
+    if (titleText) {
+      const header = document.createElement('div');
+      header.className = 'widget-title';
+      header.innerHTML = `<span>${escapeHtml(titleText)}</span>`;
+      confirmWidget.appendChild(header);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'widget-actions';
+
+    const btnOk = document.createElement('button');
+    btnOk.className = 'btn btn-danger';
+    btnOk.textContent = 'Confirm Action';
+    btnOk.addEventListener('click', () => {
+      btnOk.disabled = true;
+      btnOk.textContent = 'Executing...';
+      input.value = `confirm: ${bodyText || titleText}`;
+      submitTask();
+    });
+
+    const btnCancel = document.createElement('button');
+    btnCancel.className = 'btn btn-secondary';
+    btnCancel.textContent = 'Cancel';
+    btnCancel.addEventListener('click', () => {
+      confirmWidget.remove();
+    });
+
+    actions.appendChild(btnOk);
+    actions.appendChild(btnCancel);
+    confirmWidget.appendChild(actions);
+    bubble.appendChild(confirmWidget);
+  }
+
+  row.appendChild(avatar);
+  row.appendChild(bubble);
+  chatStream.appendChild(row);
+  scrollToBottom();
 }
 
 async function submitTask() {
   const prompt = input.value.trim();
   if (!prompt || isBusy) return;
 
+  // Intercept clear command directly
+  if (prompt.toLowerCase() === '/clear' || prompt.toLowerCase() === 'clear') {
+    window.ghostAPI?.runPrompt?.('/clear');
+    resetState();
+    return;
+  }
+
   isBusy = true;
-  input.disabled = true;
   barContainer.classList.add('working');
   badgeText.textContent = '...';
 
+  // Smoothly expand window on first message
+  expandWindow();
+
+  // Show user message & typing indicator
+  appendUserMessage(prompt);
+  showTypingIndicator();
+
+  // Reset input immediately for next follow-up
+  input.value = '';
+  badge.classList.remove('active');
+  input.placeholder = 'Thinking...';
+
   try {
     const rawResult = await window.ghostAPI.runPrompt(prompt);
+    removeTypingIndicator();
+
     let data;
     try {
       data = JSON.parse(rawResult);
     } catch {
-      data = { display: 'line', body: rawResult, auto_close: true };
+      data = { display: 'line', body: rawResult };
     }
 
-    badgeText.textContent = '>';
-    barContainer.classList.remove('working');
-    isBusy = false;
-    input.disabled = false;
-
-    const mode = data.display || 'line';
-
-    if (mode === 'list') {
-      renderList(data);
-    } else if (mode === 'compose') {
-      renderCompose(data);
-    } else if (mode === 'confirm') {
-      renderConfirm(data);
-    } else {
-      renderLine(data);
-    }
-
-    // Interactive continuation: re-enable input for immediate follow-up
-    if (mode === 'confirm') {
-      // Retain prompt context in confirm view
-      setTimeout(() => input.focus(), 40);
-    } else {
-      input.value = '';
-      badge.classList.remove('active');
-      input.placeholder = 'Follow-up or new command... (Esc to dismiss)';
-      setTimeout(() => input.focus(), 40);
-    }
+    appendGhostMessage(data);
   } catch (err) {
+    removeTypingIndicator();
+    appendGhostMessage({
+      display: 'line',
+      title: 'Error',
+      body: `[error] ${err.message}`,
+    });
+  } finally {
     barContainer.classList.remove('working');
     badgeText.textContent = '>';
     isBusy = false;
-    input.disabled = false;
-    renderLine({ display: 'line', title: 'Error', body: err.message, auto_close: false });
-    input.placeholder = 'Type a command... (Esc to dismiss)';
+    input.placeholder = 'Type a message or follow-up... (Esc to dismiss)';
     setTimeout(() => input.focus(), 40);
   }
 }
 
-// Button actions
-btnComposeSend.addEventListener('click', () => {
-  navigator.clipboard.writeText(composeBody.value);
-  btnComposeSend.textContent = 'Copied!';
-  setTimeout(() => {
-    window.ghostAPI?.closeWindow?.();
-    resetState();
-  }, 800);
-});
-
-btnComposeCancel.addEventListener('click', () => {
-  window.ghostAPI?.closeWindow?.();
-  resetState();
-});
-
-btnConfirmCancel.addEventListener('click', () => {
-  window.ghostAPI?.closeWindow?.();
-  resetState();
-});
-
-btnConfirmOk.addEventListener('click', () => {
-  input.disabled = false;
-  input.value = `confirmed: ${input.value}`;
-  submitTask();
-});
-
-// Keyboard navigation
+// Global Keyboard Navigation
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     window.ghostAPI?.closeWindow?.();
@@ -260,7 +307,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Ctrl+L or Cmd+L to clear session and reset view
+  // Ctrl+L or Cmd+L to clear chat and collapse back to single line
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
     e.preventDefault();
     window.ghostAPI?.runPrompt?.('/clear');
@@ -268,38 +315,10 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // List view arrow navigation
-  if (!viewList.classList.contains('hidden') && currentItems.length > 0) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      selectedIndex = (selectedIndex + 1) % currentItems.length;
-      updateListSelection();
-      return;
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      selectedIndex = (selectedIndex - 1 + currentItems.length) % currentItems.length;
-      updateListSelection();
-      return;
-    }
-  }
-
   if (e.key === 'Enter' && !isBusy && document.activeElement === input) {
     e.preventDefault();
     submitTask();
   }
 });
-
-function updateListSelection() {
-  const items = listItems.querySelectorAll('.list-item');
-  items.forEach((item, idx) => {
-    if (idx === selectedIndex) {
-      item.classList.add('selected');
-      item.scrollIntoView({ block: 'nearest' });
-    } else {
-      item.classList.remove('selected');
-    }
-  });
-}
 
 input.focus();
