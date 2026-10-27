@@ -107,6 +107,25 @@ function removeTypingIndicator() {
   }
 }
 
+function formatChatText(text) {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const formatted = lines.map((line) => {
+    const trimmed = line.trim();
+    if (trimmed.endsWith(':') && !trimmed.startsWith('-')) {
+      return `<div class="chat-section-title">${escapeHtml(trimmed)}</div>`;
+    }
+    if (trimmed.startsWith('- ')) {
+      return `<div class="chat-bullet"><span class="bullet-dash">-</span> ${escapeHtml(trimmed.slice(2))}</div>`;
+    }
+    if (trimmed === '') {
+      return `<div class="chat-spacer"></div>`;
+    }
+    return `<div>${escapeHtml(line)}</div>`;
+  });
+  return formatted.join('');
+}
+
 function appendGhostMessage(data) {
   const row = document.createElement('div');
   row.className = 'chat-row ghost';
@@ -118,52 +137,20 @@ function appendGhostMessage(data) {
   const bodyText = data.body || '';
   const titleText = data.title || '';
 
-  // Main text line/body
+  // Main clean formatted text body
   if (bodyText) {
     const textEl = document.createElement('div');
     textEl.className = 'chat-text';
-    textEl.innerHTML = escapeHtml(bodyText).replace(/\n/g, '<br>');
+    textEl.innerHTML = formatChatText(bodyText);
     bubble.appendChild(textEl);
   } else if (titleText && mode === 'line') {
     const textEl = document.createElement('div');
     textEl.className = 'chat-text';
-    textEl.innerHTML = escapeHtml(titleText);
+    textEl.innerHTML = formatChatText(titleText);
     bubble.appendChild(textEl);
   }
 
-  // 1. List Widget (for memories, search results, tasks)
-  if (mode === 'list' && Array.isArray(data.items) && data.items.length > 0) {
-    const listWidget = document.createElement('div');
-    listWidget.className = 'widget-list';
-
-    if (titleText) {
-      const header = document.createElement('div');
-      header.className = 'widget-title';
-      header.innerHTML = `<span>${escapeHtml(titleText)}</span><span class="widget-meta">${data.items.length} items</span>`;
-      listWidget.appendChild(header);
-    }
-
-    const itemsContainer = document.createElement('div');
-    itemsContainer.className = 'widget-list-items';
-
-    data.items.forEach((item) => {
-      const itemEl = document.createElement('div');
-      itemEl.className = 'widget-item';
-      itemEl.innerHTML = `
-        <div class="widget-item-left">
-          <span class="widget-item-label">${escapeHtml(item.label || item.title || '')}</span>
-          ${item.detail ? `<span class="widget-item-detail">${escapeHtml(item.detail)}</span>` : ''}
-        </div>
-        ${item.badge ? `<span class="widget-item-badge">${escapeHtml(item.badge)}</span>` : ''}
-      `;
-      itemsContainer.appendChild(itemEl);
-    });
-
-    listWidget.appendChild(itemsContainer);
-    bubble.appendChild(listWidget);
-  }
-
-  // 2. Compose Widget (email draft, note draft)
+  // 1. Compose Widget (email draft, note draft)
   if (mode === 'compose') {
     const composeWidget = document.createElement('div');
     composeWidget.className = 'widget-compose';

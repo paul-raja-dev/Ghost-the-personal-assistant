@@ -209,6 +209,39 @@ body {
   -webkit-user-select: text !important;
 }
 
+.chat-text {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #e2e8f0;
+}
+
+.chat-section-title {
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-top: 10px;
+  margin-bottom: 3px;
+  font-size: 13.5px;
+}
+
+.chat-section-title:first-child {
+  margin-top: 0;
+}
+
+.chat-bullet {
+  padding-left: 10px;
+  line-height: 1.55;
+  color: #d1d5db;
+}
+
+.bullet-dash {
+  color: #64748b;
+  margin-right: 4px;
+}
+
+.chat-spacer {
+  height: 8px;
+}
+
 .chat-bubble.user {
   background-color: #27282e;
   border: 1px solid #373942;
