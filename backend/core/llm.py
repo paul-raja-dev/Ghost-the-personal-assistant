@@ -15,7 +15,7 @@ if str(backend_root) not in sys.path:
     sys.path.insert(0, str(backend_root))
 
 import config
-from core import memory
+from core import memory, session
 import tools
 
 
@@ -111,6 +111,18 @@ def _clean_response(raw_text: str) -> str:
 
 
 def run(prompt: str) -> str:
+    clean_p = prompt.strip().lower()
+    if clean_p in ["/clear", "clear", "reset", "/reset"]:
+        session.clear_session()
+        return json.dumps({
+            "display": "line",
+            "title": "",
+            "body": "[ok] Session cleared.",
+            "items": [],
+            "actions": [],
+            "auto_close": True,
+        }, ensure_ascii=False)
+
     if not config.GEMINI_API_KEY:
         err = {
             "display": "line",
@@ -132,11 +144,13 @@ def run(prompt: str) -> str:
         http_options=types.HttpOptions(timeout=10_000),
     )
 
+    history = session.get_genai_history()
     last_exc = None
     for model_name in candidate_models:
         try:
             chat = client.chats.create(
                 model=model_name,
+                history=history,
                 config=types.GenerateContentConfig(
                     system_instruction=_system_prompt(),
                     tools=tools.TOOLS,
@@ -144,7 +158,9 @@ def run(prompt: str) -> str:
                 ),
             )
             resp = chat.send_message(prompt)
-            return _clean_response(resp.text)
+            final_json = _clean_response(resp.text)
+            session.record_turn(prompt, final_json)
+            return final_json
         except Exception as exc:
             last_exc = exc
             err_msg = str(exc)
