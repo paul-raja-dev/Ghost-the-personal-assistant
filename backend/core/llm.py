@@ -30,20 +30,33 @@ def _system_prompt() -> str:
         "STRICT DESIGN & BEHAVIOR RULES:\n"
         "1. ZERO EMOJIS: Never output emojis under any circumstances. Use clean text markers like '>', '[ok]', '[info]', '[error]' instead.\n"
         "2. CONVERSATIONAL & ENGAGING: You are both an autonomous Linux assistant and an intelligent conversational companion. If the user chats casually, is bored, or asks open questions, respond naturally, concisely, and insightfully in 'line' display mode with your text in 'body'.\n"
-        "3. LIVING MEMORY: Whenever the user mentions personal info, preferences, projects, contacts, or habits, call save_memory to remember it silently.\n"
-        "4. TASKS: For reminders and to-dos, call add_task. Resolve relative dates like 'tomorrow', 'next Friday', '5pm' using the current date/time above.\n"
-        "5. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
+        "3. CLEAN MINIMAL TEXT FORMATTING (NO CARDS): When the user asks what you know about them, for their profile, or to summarize information, DO NOT return cards or lists. Instead, output neat, clean, human-readable structured text in 'body' using display: 'line' grouped into sections with bullet points, exactly like this:\n"
+        "Identity & Contact:\n"
+        "- Name: Paul Raja\n"
+        "- Location: India\n"
+        "- Email: paulraja.creator@gmail.com\n"
+        "- Role: Backend Developer\n\n"
+        "Academics & Goals:\n"
+        "- Degree: 2nd year B.Tech in AI & DS, specializing in Cybersecurity\n"
+        "- Target: FAANG and product-based companies (avoiding service-based)\n"
+        "- Prep: Halfway through Binary Search on Striver A2Z sheet\n\n"
+        "Tech Stack & Projects:\n"
+        "- Languages & Tools: Python, C, HTML, CSS, Django, FastAPI, MySQL, PostgreSQL, Git, GitHub, Linux\n"
+        "- Featured Project: Zero-Trust API Gateway\n"
+        "- LinkedIn: linkedin.com/in/paul-raja-dev\n"
+        "4. LIVING MEMORY: Whenever the user mentions personal info, preferences, projects, contacts, or habits, call save_memory to remember it silently.\n"
+        "5. TASKS: For reminders and to-dos, call add_task. Resolve relative dates like 'tomorrow', 'next Friday', '5pm' using the current date/time above.\n"
+        "6. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
         "{\n"
-        '  "display": "line" | "list" | "compose" | "confirm",\n'
+        '  "display": "line" | "compose" | "confirm",\n'
         '  "title": "Optional short header",\n'
-        '  "body": "Main concise message or conversational reply",\n'
-        '  "items": [ {"label": "Item title", "detail": "Subtitle/desc", "badge": "Optional tag"} ],\n'
+        '  "body": "Main concise message or formatted text",\n'
+        '  "items": [],\n'
         '  "actions": [ {"id": "confirm", "label": "Confirm", "type": "primary"} ],\n'
         '  "auto_close": true | false\n'
         "}\n"
         "DISPLAY RULES:\n"
-        "- 'line': For conversational chat, direct answers, and task confirmations. Put the text in 'body'. Set auto_close: true.\n"
-        "- 'list': When showing multiple items (memories list, search results, emails, files). Put items in the 'items' array. Set auto_close: false.\n"
+        "- 'line': Default for conversation, direct answers, memory summaries, and clean text reports. Put the formatted text in 'body'. Set auto_close: false if multi-line or informational; true for 1-line confirmations.\n"
         "- 'compose': When the user asks to write/draft an email or document. Put the draft in 'body'. Set auto_close: false.\n"
         "- 'confirm': When an action requires user approval (deleting files, moving files). Set auto_close: false.\n"
         "Output ONLY the JSON object. Do not wrap in markdown code blocks like ```json."
@@ -66,26 +79,36 @@ def _clean_response(raw_text: str) -> str:
         if isinstance(data, dict):
             if "display" in data:
                 return json.dumps(data, ensure_ascii=False)
-            # If model returned a raw dict (e.g. memories dump or tool result), convert to list envelope
-            items = []
+            # If model returned a raw dict of categories (e.g. from list_all_memories tool)
             source_dict = data.get("categories") or data.get("memories") or data.get("data")
             if isinstance(source_dict, dict):
+                section_map = {
+                    "identity": "Identity & Contact:",
+                    "preferences": "Preferences & Communication:",
+                    "projects": "Tech Stack & Projects:",
+                    "contacts": "Contact & Links:",
+                    "workflows": "Workflows:",
+                    "notes": "Notes:"
+                }
+                out_sections = []
                 for cat, mems in source_dict.items():
-                    if isinstance(mems, list):
+                    if isinstance(mems, list) and mems:
+                        header = section_map.get(cat, f"{cat.capitalize()}:")
+                        bullets = []
                         for m in mems:
-                            items.append({
-                                "label": m.get("content", str(m)),
-                                "detail": cat,
-                                "badge": m.get("id", "")
-                            })
-            return json.dumps({
-                "display": "list" if items else "line",
-                "title": data.get("title", "Saved Memories" if items else "Result"),
-                "body": f"Found {len(items)} items." if items else (data.get("message") or "No items found."),
-                "items": items,
-                "actions": [],
-                "auto_close": False if items else True,
-            }, ensure_ascii=False)
+                            content = m.get("content", str(m)) if isinstance(m, dict) else str(m)
+                            bullets.append(f"- {content}")
+                        if bullets:
+                            out_sections.append(f"{header}\n" + "\n".join(bullets))
+                formatted_body = "\n\n".join(out_sections) if out_sections else "No saved memories found."
+                return json.dumps({
+                    "display": "line",
+                    "title": "",
+                    "body": formatted_body,
+                    "items": [],
+                    "actions": [],
+                    "auto_close": False,
+                }, ensure_ascii=False)
     except Exception:
         pass
 
