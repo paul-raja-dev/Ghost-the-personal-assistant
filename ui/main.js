@@ -224,6 +224,50 @@ if (!gotTheLock) {
     });
   });
 
+  ipcMain.handle('ghost:list-sessions', async () => {
+    return new Promise((resolve) => {
+      const rootDir = path.join(__dirname, '..');
+      const venvPython = path.join(rootDir, '.venv', 'bin', 'python');
+      const pythonExec = fs.existsSync(venvPython) ? venvPython : 'python3';
+      const backendScript = path.join(rootDir, 'backend', 'main.py');
+
+      const pyProcess = spawn(pythonExec, [backendScript, '--list-sessions'], { cwd: rootDir });
+      let stdout = '';
+      pyProcess.stdout.on('data', (d) => { stdout += d.toString(); });
+      pyProcess.on('close', () => {
+        try {
+          const sessions = JSON.parse(stdout.trim());
+          resolve(sessions);
+        } catch {
+          resolve([]);
+        }
+      });
+      pyProcess.on('error', () => resolve([]));
+    });
+  });
+
+  ipcMain.handle('ghost:load-session', async (event, sessionId) => {
+    return new Promise((resolve) => {
+      const rootDir = path.join(__dirname, '..');
+      const venvPython = path.join(rootDir, '.venv', 'bin', 'python');
+      const pythonExec = fs.existsSync(venvPython) ? venvPython : 'python3';
+      const backendScript = path.join(rootDir, 'backend', 'main.py');
+
+      const pyProcess = spawn(pythonExec, [backendScript, '--load-session', sessionId], { cwd: rootDir });
+      let stdout = '';
+      pyProcess.stdout.on('data', (d) => { stdout += d.toString(); });
+      pyProcess.on('close', () => {
+        try {
+          const sessionData = JSON.parse(stdout.trim());
+          resolve(sessionData);
+        } catch {
+          resolve(null);
+        }
+      });
+      pyProcess.on('error', () => resolve(null));
+    });
+  });
+
   ipcMain.handle('ghost:close-window', () => {
     saveWindowState();
     app.quit();
