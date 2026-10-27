@@ -30,55 +30,20 @@
         autofocus
       />
 
-      <div class="action-badge" id="action-badge">
+      <div class="action-badge" id="action-badge" title="Send (Enter)">
         <span id="badge-text">&gt;</span>
       </div>
     </div>
 
-    <!-- Dynamic Content Area -->
+    <!-- Conversational Stream Area -->
     <div class="dynamic-content hidden" id="dynamic-content">
-      <!-- Line Mode View -->
-      <div class="view-line hidden" id="view-line">
-        <span class="status-marker" id="line-marker">&gt;</span>
-        <span class="line-text" id="line-text"></span>
-      </div>
-
-      <!-- List Mode View -->
-      <div class="view-list hidden" id="view-list">
-        <div class="view-header">
-          <span class="view-title" id="list-title">Items</span>
-          <span class="view-meta" id="list-meta"></span>
-        </div>
-        <div class="list-scroll" id="list-items"></div>
-      </div>
-
-      <!-- Compose Mode View -->
-      <div class="view-compose hidden" id="view-compose">
-        <div class="view-header">
-          <span class="view-title" id="compose-title">Draft</span>
-        </div>
-        <textarea id="compose-body" spellcheck="false"></textarea>
-        <div class="compose-actions">
-          <button class="btn btn-primary" id="btn-compose-send">Copy to clipboard</button>
-          <button class="btn btn-secondary" id="btn-compose-cancel">Dismiss</button>
-        </div>
-      </div>
-
-      <!-- Confirm Mode View -->
-      <div class="view-confirm hidden" id="view-confirm">
-        <div class="view-header">
-          <span class="view-title" id="confirm-title">Confirmation Required</span>
-        </div>
-        <div class="confirm-body" id="confirm-body"></div>
-        <div class="confirm-actions">
-          <button class="btn btn-danger" id="btn-confirm-ok">Confirm</button>
-          <button class="btn btn-secondary" id="btn-confirm-cancel">Cancel</button>
-        </div>
+      <div class="chat-stream" id="chat-stream">
+        <!-- Messages appended dynamically -->
       </div>
 
       <!-- Footer Help Hint -->
       <div class="content-footer" id="content-footer">
-        <span class="footer-tip">Esc to dismiss</span>
+        <span class="footer-tip">Esc to dismiss &bull; Ctrl+L to clear</span>
       </div>
     </div>
   </div>
