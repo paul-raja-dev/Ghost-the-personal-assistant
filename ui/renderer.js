@@ -48,6 +48,7 @@ function resetState() {
   window.ghostAPI?.setWindowHeight?.(64);
   input.value = '';
   input.disabled = false;
+  input.placeholder = 'Tell me what to do...';
   barContainer.classList.remove('working');
   badge.classList.remove('active');
   badgeText.textContent = '>';
@@ -70,11 +71,22 @@ window.addEventListener('mouseup', () => {
 });
 
 input.addEventListener('input', () => {
+  if (autoCloseTimer) {
+    clearTimeout(autoCloseTimer);
+    autoCloseTimer = null;
+  }
   const query = input.value.trim();
   if (query.length > 0) {
     badge.classList.add('active');
   } else {
     badge.classList.remove('active');
+  }
+});
+
+// Click action badge to submit
+badge.addEventListener('click', () => {
+  if (!isBusy && input.value.trim()) {
+    submitTask();
   }
 });
 
@@ -177,6 +189,10 @@ async function submitTask() {
     }
 
     badgeText.textContent = '>';
+    barContainer.classList.remove('working');
+    isBusy = false;
+    input.disabled = false;
+
     const mode = data.display || 'line';
 
     if (mode === 'list') {
@@ -188,10 +204,25 @@ async function submitTask() {
     } else {
       renderLine(data);
     }
+
+    // Interactive continuation: re-enable input for immediate follow-up
+    if (mode === 'confirm') {
+      // Retain prompt context in confirm view
+      setTimeout(() => input.focus(), 40);
+    } else {
+      input.value = '';
+      badge.classList.remove('active');
+      input.placeholder = 'Follow-up or new command... (Esc to dismiss)';
+      setTimeout(() => input.focus(), 40);
+    }
   } catch (err) {
-    renderLine({ display: 'line', title: 'Error', body: err.message, auto_close: false });
+    barContainer.classList.remove('working');
+    badgeText.textContent = '>';
     isBusy = false;
     input.disabled = false;
+    renderLine({ display: 'line', title: 'Error', body: err.message, auto_close: false });
+    input.placeholder = 'Type a command... (Esc to dismiss)';
+    setTimeout(() => input.focus(), 40);
   }
 }
 
@@ -225,6 +256,14 @@ btnConfirmOk.addEventListener('click', () => {
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     window.ghostAPI?.closeWindow?.();
+    resetState();
+    return;
+  }
+
+  // Ctrl+L or Cmd+L to clear session and reset view
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+    e.preventDefault();
+    window.ghostAPI?.runPrompt?.('/clear');
     resetState();
     return;
   }
