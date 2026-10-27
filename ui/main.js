@@ -99,11 +99,41 @@ if (!gotTheLock) {
     }
   });
 
-  ipcMain.handle('ghost:set-height', (event, newHeight) => {
-    if (mainWindow) {
-      const [w] = mainWindow.getSize();
-      mainWindow.setSize(w, newHeight);
+  let resizeInterval = null;
+  ipcMain.handle('ghost:set-height', (event, newHeight, animate = false) => {
+    if (!mainWindow) return;
+    if (resizeInterval) {
+      clearInterval(resizeInterval);
+      resizeInterval = null;
     }
+
+    const [w, currentH] = mainWindow.getSize();
+    if (currentH === newHeight) return;
+
+    if (!animate) {
+      mainWindow.setSize(w, newHeight);
+      return;
+    }
+
+    // Smooth interpolation across ~140ms
+    const stepCount = 8;
+    const diff = newHeight - currentH;
+    const stepH = diff / stepCount;
+    let step = 0;
+
+    resizeInterval = setInterval(() => {
+      step++;
+      if (step >= stepCount) {
+        clearInterval(resizeInterval);
+        resizeInterval = null;
+        if (mainWindow) mainWindow.setSize(w, newHeight);
+      } else {
+        if (mainWindow) {
+          const target = Math.round(currentH + stepH * step);
+          mainWindow.setSize(w, target);
+        }
+      }
+    }, 16);
   });
 
   ipcMain.handle('ghost:save-position', () => {
