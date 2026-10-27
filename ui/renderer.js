@@ -87,7 +87,6 @@ function showTypingIndicator() {
   row.className = 'chat-row ghost';
   row.id = 'typing-row';
   row.innerHTML = `
-    <span class="chat-avatar">&gt;</span>
     <div class="chat-bubble ghost typing">
       <div class="typing-dot"></div>
       <div class="typing-dot"></div>
@@ -108,10 +107,6 @@ function removeTypingIndicator() {
 function appendGhostMessage(data) {
   const row = document.createElement('div');
   row.className = 'chat-row ghost';
-
-  const avatar = document.createElement('span');
-  avatar.className = 'chat-avatar';
-  avatar.textContent = '>';
 
   const bubble = document.createElement('div');
   bubble.className = 'chat-bubble ghost';
@@ -238,7 +233,6 @@ function appendGhostMessage(data) {
     bubble.appendChild(confirmWidget);
   }
 
-  row.appendChild(avatar);
   row.appendChild(bubble);
   chatStream.appendChild(row);
   scrollToBottom();

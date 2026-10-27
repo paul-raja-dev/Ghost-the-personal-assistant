@@ -188,16 +188,6 @@ body {
 .chat-row.ghost {
   justify-content: flex-start;
   align-items: flex-start;
-  gap: 8px;
-}
-
-.chat-avatar {
-  font-family: monospace;
-  font-size: 11px;
-  color: #64748b;
-  font-weight: 700;
-  margin-top: 6px;
-  flex-shrink: 0;
 }
 
 .chat-bubble {
