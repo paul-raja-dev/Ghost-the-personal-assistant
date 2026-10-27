@@ -35,7 +35,7 @@ function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
   const width = 580;
-  const height = 64;
+  const height = 54;
 
   const defaultX = Math.round((screenWidth - width) / 2);
   const defaultY = Math.round(screenHeight / 4);
@@ -51,7 +51,7 @@ function createWindow() {
     width: width,
     height: height,
     minWidth: 420,
-    minHeight: 52,
+    minHeight: 54,
     x: x,
     y: y,
     frame: false,
@@ -78,7 +78,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     // Explicitly apply coordinates so Linux WM does not force top-left
     mainWindow.setPosition(x, y);
-    mainWindow.setSize(width, 64);
+    mainWindow.setSize(width, 54);
     mainWindow.show();
     mainWindow.focus();
 

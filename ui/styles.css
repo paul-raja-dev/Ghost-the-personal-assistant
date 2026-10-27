@@ -12,7 +12,8 @@ body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  padding: 6px;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
 }
@@ -26,18 +27,18 @@ body {
 /* ── Draggable Main Bar ── */
 .bar-container {
   width: 100%;
-  height: 52px;
+  height: 54px;
   background-color: #1a1a1d;
   border: 1px solid #2a2b30;
   border-radius: 12px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  box-shadow: none;
   display: flex;
   align-items: center;
   padding: 0 14px;
   gap: 12px;
   -webkit-app-region: drag;
   cursor: grab;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease;
   flex-shrink: 0;
 }
 
@@ -47,7 +48,7 @@ body {
 
 .bar-container.working {
   border-color: #4a5568;
-  box-shadow: 0 16px 40px rgba(74, 85, 104, 0.4);
+  box-shadow: none;
 }
 
 .drag-handle {
@@ -119,7 +120,7 @@ body {
   background-color: #151518;
   border: 1px solid #26272c;
   border-radius: 12px;
-  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.6);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -443,14 +444,14 @@ body {
 /* ── History Drawer Overlay (Ctrl + H) ── */
 .history-drawer {
   position: absolute;
-  top: 58px;
-  left: 6px;
-  right: 6px;
-  bottom: 6px;
+  top: 60px;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background-color: #161619;
   border: 1px solid #2a2b30;
-  border-radius: 10px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  border-radius: 12px;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   z-index: 100;

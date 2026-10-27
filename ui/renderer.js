@@ -35,7 +35,7 @@ function collapseWindow() {
   isExpanded = false;
   dynamicContent.classList.add('hidden');
   chatStream.innerHTML = '';
-  window.ghostAPI?.setWindowHeight?.(64, true);
+  window.ghostAPI?.setWindowHeight?.(54, true);
 }
 
 function resetState() {
