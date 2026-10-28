@@ -1,18 +1,60 @@
-"""System and Live Filesystem Operations for Ghost."""
+"""System and Live Filesystem Operations for Ghost with Safe Trash and Mandatory Confirmation."""
 import glob
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+PENDING_ACTIONS_FILE = Path.home() / ".config" / "ghost" / "pending_actions.json"
 
 
 def _resolve_path(path_str: str) -> Path:
     """Safely expand and resolve a path string."""
     expanded = os.path.expanduser(os.path.expandvars(path_str.strip()))
     return Path(expanded).resolve()
+
+
+def _load_pending_actions() -> dict:
+    if not PENDING_ACTIONS_FILE.exists():
+        return {}
+    try:
+        return json.loads(PENDING_ACTIONS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_pending_actions(actions: dict):
+    PENDING_ACTIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    PENDING_ACTIONS_FILE.write_text(json.dumps(actions, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _move_to_trash_bin(target_path: Path) -> bool:
+    """Move a file or directory safely to Linux desktop Trash (never permanently delete)."""
+    # 1. Try native Linux gio trash
+    try:
+        res = subprocess.run(["gio", "trash", str(target_path)], capture_output=True, text=True, timeout=5)
+        if res.returncode == 0:
+            return True
+    except Exception:
+        pass
+
+    # 2. Fallback: Move directly to user's GNOME Trash directory
+    try:
+        trash_dir = Path.home() / ".local" / "share" / "Trash" / "files"
+        trash_dir.mkdir(parents=True, exist_ok=True)
+        destination = trash_dir / target_path.name
+        if destination.exists():
+            destination = trash_dir / f"{target_path.stem}_{int(datetime.now().timestamp())}{target_path.suffix}"
+        shutil.move(str(target_path), str(destination))
+        return True
+    except Exception:
+        return False
 
 
 def execute_command(command: str, working_dir: str = "~") -> dict:
@@ -29,14 +71,25 @@ def execute_command(command: str, working_dir: str = "~") -> dict:
     if not cmd:
         return {"status": "error", "message": "Command is empty."}
 
-    # Guardrail against catastrophic root destruction
     lower_cmd = cmd.lower()
+
+    # Guardrails against catastrophic root destruction
     destructive_patterns = [
-        "rm -rf /", "rm -rf /*", "mkfs", ":(){ :|:& };:", "dd if=/dev/zero of=/dev/sd", "dd if=/dev/urandom of=/dev/sd"
+        "rm -rf /", "rm -rf /*", "mkfs", ":(){ :|:& };:", "dd if=/dev/zero", "dd if=/dev/urandom"
     ]
     for pattern in destructive_patterns:
         if pattern in lower_cmd:
             return {"status": "error", "message": f"Execution blocked: Command matches destructive pattern '{pattern}'."}
+
+    # Strict file deletion guardrails: Block direct rm / rmdir / unlink / shred in shell
+    tokens = re.split(r"[;&|]\s*", lower_cmd)
+    for tok in tokens:
+        sub = tok.strip()
+        if sub == "rm" or sub.startswith("rm ") or sub.startswith("rmdir") or sub.startswith("unlink ") or sub.startswith("shred "):
+            return {
+                "status": "error",
+                "message": "Execution blocked: Direct file deletion via shell ('rm'/'rmdir'/'unlink'/'shred') is strictly prohibited. You must use the confirmed trash staging system instead.",
+            }
 
     cwd_path = _resolve_path(working_dir)
     if not cwd_path.exists() or not cwd_path.is_dir():
@@ -208,9 +261,7 @@ def search_files(query: str, search_dir: str = "~", file_pattern: str = "*", max
         return {"status": "error", "message": f"Search directory not found: {root_path}"}
 
     results = []
-    # Try using fast grep/find if query is content search
     try:
-        # 1. Filename matching
         for path in root_path.rglob(file_pattern):
             if query.lower() in path.name.lower():
                 results.append({
@@ -261,14 +312,16 @@ def move_or_rename(source: str, destination: str) -> dict:
         return {"status": "error", "message": f"Move failed: {exc}"}
 
 
-def delete_file_or_dir(path: str) -> dict:
-    """Delete a file or directory from the filesystem.
+def stage_file_deletion(path: str, reason: str = "") -> dict:
+    """Stage a file or directory for deletion to Trash. DOES NOT delete the file.
+    Always requires explicit confirmation from the user before executing.
 
     Args:
-        path: File or directory path to delete.
+        path: File or directory path the user wants to remove.
+        reason: Optional user reason or explanation.
 
     Returns:
-        A dict with status, path, and message.
+        A dict containing confirmation_required status, ticket_id, path, and display instructions.
     """
     target_path = _resolve_path(path)
     if not target_path.exists():
@@ -278,19 +331,64 @@ def delete_file_or_dir(path: str) -> dict:
     if str(target_path) in ["/", str(Path.home()), "/home"]:
         return {"status": "error", "message": "Deletion blocked: Cannot delete root or home directory."}
 
-    try:
-        if target_path.is_dir():
-            shutil.rmtree(str(target_path))
-        else:
-            target_path.unlink()
+    ticket_id = f"trash_{uuid.uuid4().hex[:8]}"
+    actions = _load_pending_actions()
+    actions[ticket_id] = {
+        "ticket_id": ticket_id,
+        "path": str(target_path),
+        "name": target_path.name,
+        "is_dir": target_path.is_dir(),
+        "reason": reason,
+        "staged_at": datetime.now().isoformat(),
+    }
+    _save_pending_actions(actions)
 
+    return {
+        "status": "confirmation_required",
+        "ticket_id": ticket_id,
+        "path": str(target_path),
+        "name": target_path.name,
+        "is_directory": target_path.is_dir(),
+        "message": f"Action staged: Moving '{target_path.name}' to Trash. YOU MUST NOT DELETE IT DIRECTLY. Return a JSON response with display: 'confirm' asking the user for explicit approval with ticket_id '{ticket_id}'.",
+    }
+
+
+def execute_confirmed_trash(ticket_id: str) -> dict:
+    """Execute a confirmed deletion by moving the file safely to Linux desktop Trash (gio trash).
+    Can only be called after explicit user confirmation of the ticket_id.
+
+    Args:
+        ticket_id: The confirmation ticket ID generated by stage_file_deletion.
+
+    Returns:
+        A dict with status, path, and recovery message.
+    """
+    actions = _load_pending_actions()
+    ticket = actions.get(ticket_id)
+    if not ticket:
+        return {
+            "status": "error",
+            "message": f"No pending deletion ticket found with ID '{ticket_id}'. Staged action may have expired or already executed.",
+        }
+
+    target_path = Path(ticket["path"])
+    if not target_path.exists():
+        actions.pop(ticket_id, None)
+        _save_pending_actions(actions)
+        return {"status": "error", "message": f"Target no longer exists: {target_path}"}
+
+    success = _move_to_trash_bin(target_path)
+    if success:
+        actions.pop(ticket_id, None)
+        _save_pending_actions(actions)
         return {
             "status": "ok",
+            "ticket_id": ticket_id,
             "path": str(target_path),
-            "message": f"Deleted '{target_path.name}'",
+            "message": f"Moved '{target_path.name}' safely to Trash. Recoverable in ~/.local/share/Trash.",
         }
-    except Exception as exc:
-        return {"status": "error", "message": f"Failed to delete: {exc}"}
+    else:
+        return {"status": "error", "message": f"Failed to move '{target_path.name}' to Trash."}
 
 
 def get_system_status() -> dict:

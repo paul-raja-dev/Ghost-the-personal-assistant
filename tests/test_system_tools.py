@@ -67,13 +67,19 @@ class TestSystemTools(unittest.TestCase):
         self.assertFalse(self.test_file.exists())
         self.assertTrue(self.renamed_file.exists())
 
-        # 5. Delete file
-        del_res = system_tools.delete_file_or_dir(str(self.renamed_file))
-        self.assertEqual(del_res["status"], "ok")
+        # 5. Staged Trash
+        stage_res = system_tools.stage_file_deletion(str(self.renamed_file))
+        self.assertEqual(stage_res["status"], "confirmation_required")
+        ticket_id = stage_res["ticket_id"]
+        self.assertTrue(self.renamed_file.exists())
+
+        # Execute confirmed trash
+        trash_res = system_tools.execute_confirmed_trash(ticket_id)
+        self.assertEqual(trash_res["status"], "ok")
         self.assertFalse(self.renamed_file.exists())
 
         # 6. Safety check: Root deletion blocked
-        root_del = system_tools.delete_file_or_dir("/")
+        root_del = system_tools.stage_file_deletion("/")
         self.assertEqual(root_del["status"], "error")
         self.assertIn("blocked", root_del["message"].lower())
 

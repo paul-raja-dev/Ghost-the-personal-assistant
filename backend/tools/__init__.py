@@ -8,7 +8,8 @@ from .system_tools import (
     list_directory,
     search_files,
     move_or_rename,
-    delete_file_or_dir,
+    stage_file_deletion,
+    execute_confirmed_trash,
     get_system_status,
 )
 
@@ -20,7 +21,7 @@ TOOLS = [
     list_directory,
     search_files,
     move_or_rename,
-    delete_file_or_dir,
+    stage_file_deletion,
     get_system_status,
     # Memory
     save_memory,
@@ -39,7 +40,8 @@ __all__ = [
     "list_directory",
     "search_files",
     "move_or_rename",
-    "delete_file_or_dir",
+    "stage_file_deletion",
+    "execute_confirmed_trash",
     "get_system_status",
     "add_task",
     "save_memory",

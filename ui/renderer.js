@@ -230,11 +230,20 @@ function appendGhostMessage(data) {
 
     const btnOk = document.createElement('button');
     btnOk.className = 'btn btn-danger';
-    btnOk.textContent = 'Confirm Action';
+    btnOk.textContent = (data.actions && data.actions[0] && data.actions[0].label) || 'Confirm Action';
     btnOk.addEventListener('click', () => {
       btnOk.disabled = true;
       btnOk.textContent = 'Executing...';
-      input.value = `confirm: ${bodyText || titleText}`;
+      let payload = '';
+      if (data.actions && data.actions[0] && data.actions[0].payload) {
+        payload = data.actions[0].payload;
+      } else if (bodyText.includes('ticket:')) {
+        const ticketMatch = bodyText.match(/ticket:\s*([a-zA-Z0-9_-]+)/);
+        if (ticketMatch) {
+          payload = `confirm: trash ${ticketMatch[1]}`;
+        }
+      }
+      input.value = payload || `confirm: ${bodyText || titleText}`;
       submitTask();
     });
 

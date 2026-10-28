@@ -37,11 +37,23 @@ def _system_prompt() -> str:
         "   - Use list_directory and search_files to explore the filesystem.\n"
         "   - Use get_system_status to check live RAM, disk, CPU, and uptime.\n"
         "   - Resolve '~' to /home/paul automatically.\n"
-        "4. CLEAN FORMATTING & CODE BLOCKS: When outputting command output, scripts, or file content, format them cleanly. Use markdown code blocks (```python, ```bash) or bulleted summaries. Avoid ugly walls of raw text.\n"
-        "5. PERSONAL INFO (NO CARDS): When the user asks what you know about them or for their profile, DO NOT return cards or lists. Instead, output neat, clean, human-readable structured text in 'body' using display: 'line' grouped into sections with bullet points (Identity & Contact, Academics & Goals, Tech Stack & Projects).\n"
-        "6. LIVING MEMORY: Whenever the user mentions personal info, preferences, projects, contacts, or habits, call save_memory to remember it silently.\n"
-        "7. TASKS: For reminders and to-dos, call add_task. Resolve relative dates like 'tomorrow', 'next Friday', '5pm' using the current date/time above.\n"
-        "8. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
+        "4. MANDATORY FILE DELETION CONFIRMATION: You CANNOT delete or trash files directly. Permanent deletion (unlink/rmtree/rm) is STRICTLY PROHIBITED.\n"
+        "   - When the user asks to delete or remove a file or directory, you MUST call stage_file_deletion(path).\n"
+        "   - After calling stage_file_deletion, you MUST return a response with display: 'confirm':\n"
+        "     {\n"
+        '       "display": "confirm",\n'
+        '       "title": "Confirm Move to Trash",\n'
+        '       "body": "Are you sure you want to move <path> to Trash? (ticket: <ticket_id>)",\n'
+        '       "items": [],\n'
+        '       "actions": [ {"id": "confirm", "label": "Move to Trash", "type": "danger", "payload": "confirm: trash <ticket_id>"} ],\n'
+        '       "auto_close": false\n'
+        "     }\n"
+        "   - STRICT INFORMATIONAL INQUIRIES: If the user asks 'how about X', 'what about Y', 'check Z', or asks about file sizes/storage, DO NOT stage or delete anything! Treat it strictly as an informational query: inspect the file, check its size with read_file/list_directory/execute_command, or explain what it is. NEVER call stage_file_deletion unless the user explicitly uses the words 'delete', 'remove', or 'trash'.\n"
+        "5. CLEAN FORMATTING & CODE BLOCKS: When outputting command output, scripts, or file content, format them cleanly. Use markdown code blocks (```python, ```bash) or bulleted summaries. Avoid ugly walls of raw text.\n"
+        "6. PERSONAL INFO (NO CARDS): When the user asks what you know about them or for their profile, DO NOT return cards or lists. Instead, output neat, clean, human-readable structured text in 'body' using display: 'line' grouped into sections with bullet points (Identity & Contact, Academics & Goals, Tech Stack & Projects).\n"
+        "7. LIVING MEMORY: Whenever the user mentions personal info, preferences, projects, contacts, or habits, call save_memory to remember it silently.\n"
+        "8. TASKS: For reminders and to-dos, call add_task. Resolve relative dates like 'tomorrow', 'next Friday', '5pm' using the current date/time above.\n"
+        "9. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
         "{\n"
         '  "display": "line" | "compose" | "confirm",\n'
         '  "title": "Optional short header",\n'
@@ -53,7 +65,7 @@ def _system_prompt() -> str:
         "DISPLAY RULES:\n"
         "- 'line': Default for conversation, direct answers, command results, file views, and clean text reports. Set auto_close: false if multi-line or informational; true for 1-line confirmations.\n"
         "- 'compose': When the user asks to write/draft an email or document. Put the draft in 'body'. Set auto_close: false.\n"
-        "- 'confirm': When an action requires user approval (e.g. deleting important files). Set auto_close: false.\n"
+        "- 'confirm': When an action requires user approval (e.g. moving files to Trash). Set auto_close: false.\n"
         "Output ONLY the JSON object. Do not wrap in markdown code blocks like ```json."
     )
 
@@ -130,8 +142,10 @@ def _clean_response(raw_text: str) -> str:
 
 
 def run(prompt: str) -> str:
-    clean_p = prompt.strip().lower()
-    if clean_p in ["/clear", "clear", "reset", "/reset"]:
+    clean_p = prompt.strip()
+    lower_p = clean_p.lower()
+
+    if lower_p in ["/clear", "clear", "reset", "/reset"]:
         session.clear_session()
         return json.dumps({
             "display": "line",
@@ -141,6 +155,30 @@ def run(prompt: str) -> str:
             "actions": [],
             "auto_close": True,
         }, ensure_ascii=False)
+
+    # Intercept confirmed trash actions directly
+    if lower_p.startswith("confirm: trash "):
+        ticket_id = clean_p[len("confirm: trash "):].strip()
+        from tools import system_tools
+        res = system_tools.execute_confirmed_trash(ticket_id)
+        if res.get("status") == "ok":
+            return json.dumps({
+                "display": "line",
+                "title": "Moved to Trash",
+                "body": f"[ok] {res.get('message')}",
+                "items": [],
+                "actions": [],
+                "auto_close": False,
+            }, ensure_ascii=False)
+        else:
+            return json.dumps({
+                "display": "line",
+                "title": "Trash Notice",
+                "body": f"[error] {res.get('message')}",
+                "items": [],
+                "actions": [],
+                "auto_close": False,
+            }, ensure_ascii=False)
 
     if not config.GEMINI_API_KEY:
         err = {
