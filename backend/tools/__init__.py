@@ -11,6 +11,7 @@ from .system_tools import (
     stage_file_deletion,
     execute_confirmed_trash,
     get_system_status,
+    inspect_project,
 )
 
 TOOLS = [
@@ -22,6 +23,7 @@ TOOLS = [
     search_files,
     move_or_rename,
     stage_file_deletion,
+    inspect_project,
     get_system_status,
     # Memory
     save_memory,
@@ -42,6 +44,7 @@ __all__ = [
     "move_or_rename",
     "stage_file_deletion",
     "execute_confirmed_trash",
+    "inspect_project",
     "get_system_status",
     "add_task",
     "save_memory",
