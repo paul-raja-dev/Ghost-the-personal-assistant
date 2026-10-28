@@ -1,21 +1,31 @@
 """Ghost Conversation Session History Manager.
 Provides multi-session persistence, session indexing with quick titles and dates,
-and sliding-window chat continuation for Google GenAI.
+sliding-window chat continuation, and autonomous rolling conversation summaries for Google GenAI.
 """
 import json
+import sys
 import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from google import genai
 from google.genai import types
+
+# Ensure backend root is in sys.path
+backend_root = Path(__file__).resolve().parent.parent
+if str(backend_root) not in sys.path:
+    sys.path.insert(0, str(backend_root))
+
+import config
 
 SESSION_DIR = Path.home() / ".config" / "ghost"
 SESSION_FILE = SESSION_DIR / "session.json"
 SESSIONS_ARCHIVE_FILE = SESSION_DIR / "chat_sessions.json"
 SESSION_TTL_SECONDS = 30 * 60  # 30 minutes active TTL
-MAX_SAVED_TURNS = 12  # Retain up to 12 back-and-forth turns (24 messages) per session
+VERBATIM_TURNS_KEEP = 8  # Retain up to 8 back-and-forth turns (16 messages) verbatim
+SUMMARY_TRIGGER_TURNS = 12  # Trigger consolidation when reaching 12 turns (24 messages)
 
 
 def _ensure_dir():
@@ -58,6 +68,74 @@ def _generate_title(first_prompt: str) -> str:
     return title.capitalize() or "Conversation"
 
 
+def _summarize_turns(turns_to_summarize: list[dict], existing_summary: str = "") -> str:
+    """Summarize a segment of conversation turns and merge with existing running summary."""
+    if not turns_to_summarize:
+        return existing_summary
+
+    lines = []
+    for t in turns_to_summarize:
+        role = "User" if t.get("role") == "user" else "Ghost"
+        text = t.get("text", "").strip()
+        if text.startswith("{") and "body" in text:
+            try:
+                data = json.loads(text)
+                text = data.get("body", text)
+            except Exception:
+                pass
+        lines.append(f"{role}: {text}")
+
+    conversation_text = "\n".join(lines)
+    prompt = (
+        "You are a concise conversation summarizer. Strict zero emojis.\n"
+        "Condense the following conversation segment into 2 to 4 bullet points capturing key topics, decisions, instructions, and facts.\n"
+    )
+    if existing_summary:
+        prompt += f"\nPrevious Running Summary so far:\n{existing_summary}\n\nUpdate and consolidate the summary to include this new segment:\n"
+    else:
+        prompt += "\nConversation Segment:\n"
+    prompt += conversation_text + "\n\nUpdated Concise Summary (clean bullet points):"
+
+    try:
+        client = genai.Client(
+            api_key=config.GEMINI_API_KEY,
+            http_options=types.HttpOptions(timeout=10_000),
+        )
+        resp = client.models.generate_content(
+            model="gemini-3.5-flash-lite",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=300,
+                temperature=0,
+            )
+        )
+        summary_text = (resp.text or "").strip()
+        if summary_text:
+            return summary_text
+    except Exception as exc:
+        print(f"[warning] Failed to summarize turns via Gemini: {exc}")
+
+    # Fallback deterministic summary
+    user_topics = [t.get("text", "")[:40] for t in turns_to_summarize if t.get("role") == "user"]
+    fallback = "- Topics discussed: " + "; ".join(user_topics[:4])
+    if existing_summary:
+        return existing_summary + "\n" + fallback
+    return fallback
+
+
+def get_session_summary() -> str:
+    """Load running summary from the active session file if within TTL."""
+    if not SESSION_FILE.exists():
+        return ""
+    try:
+        data = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+        if time.time() - data.get("updated_at", 0) > SESSION_TTL_SECONDS:
+            return ""
+        return data.get("summary", "")
+    except Exception:
+        return ""
+
+
 def load_session() -> list[dict]:
     """Load valid turns from the active session file."""
     if not SESSION_FILE.exists():
@@ -88,6 +166,7 @@ def record_turn(user_prompt: str, model_response: str) -> None:
 
     session_id = current_data.get("id")
     turns = current_data.get("turns", [])
+    summary = current_data.get("summary", "")
     created_at_str = current_data.get("date")
 
     now = datetime.now()
@@ -101,10 +180,18 @@ def record_turn(user_prompt: str, model_response: str) -> None:
     turns.append({"role": "user", "text": user_prompt.strip()})
     turns.append({"role": "model", "text": model_response.strip()})
 
-    # Keep only up to MAX_SAVED_TURNS
-    max_msgs = MAX_SAVED_TURNS * 2
-    if len(turns) > max_msgs:
-        turns = turns[-max_msgs:]
+    # Rolling summary consolidation:
+    # When turns reach SUMMARY_TRIGGER_TURNS * 2 (24 messages / 12 turns),
+    # slice off the oldest turns that exceed VERBATIM_TURNS_KEEP * 2,
+    # summarize them into running summary, and retain recent turns verbatim.
+    trigger_limit = SUMMARY_TRIGGER_TURNS * 2
+    verbatim_limit = VERBATIM_TURNS_KEEP * 2
+
+    if len(turns) >= trigger_limit:
+        cutoff = len(turns) - verbatim_limit
+        old_turns = turns[:cutoff]
+        turns = turns[cutoff:]
+        summary = _summarize_turns(old_turns, summary)
 
     # Title is derived from first user turn
     first_user_turn = next((t["text"] for t in turns if t.get("role") == "user"), user_prompt)
@@ -115,6 +202,7 @@ def record_turn(user_prompt: str, model_response: str) -> None:
         "title": title,
         "date": created_at_str,
         "updated_at": now_ts,
+        "summary": summary,
         "turns": turns,
     }
 
@@ -178,9 +266,26 @@ def load_session_by_id(session_id: str) -> Optional[dict]:
 
 
 def get_genai_history() -> List[types.Content]:
-    """Convert session turns into google.genai types.Content objects."""
+    """Convert session turns and rolling summary into google.genai types.Content objects."""
+    summary = get_session_summary()
     turns = load_session()
     contents = []
+
+    # If a rolling summary of earlier turns exists, inject as the opening context block
+    if summary:
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=f"[Context Summary of earlier conversation turns:\n{summary}]")]
+            )
+        )
+        contents.append(
+            types.Content(
+                role="model",
+                parts=[types.Part.from_text(text="[ok] Context acknowledged. I have full context of our earlier discussion.")]
+            )
+        )
+
     for turn in turns:
         role = turn.get("role", "user")
         text = turn.get("text", "")
