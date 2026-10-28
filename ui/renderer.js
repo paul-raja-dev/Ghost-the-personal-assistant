@@ -107,23 +107,51 @@ function removeTypingIndicator() {
   }
 }
 
+function parseInlineCode(str) {
+  const parts = str.split(/(`[^`]+`)/g);
+  return parts.map((p) => {
+    if (p.startsWith('`') && p.endsWith('`') && p.length > 2) {
+      return `<span class="chat-inline-code">${escapeHtml(p.slice(1, -1))}</span>`;
+    }
+    return escapeHtml(p);
+  }).join('');
+}
+
 function formatChatText(text) {
   if (!text) return '';
-  const lines = text.split('\n');
-  const formatted = lines.map((line) => {
-    const trimmed = line.trim();
-    if (trimmed.endsWith(':') && !trimmed.startsWith('-')) {
-      return `<div class="chat-section-title">${escapeHtml(trimmed)}</div>`;
+
+  // Handle multi-line code blocks ```...```
+  const parts = text.split(/(```[\s\S]*?```)/g);
+  return parts.map((part) => {
+    if (part.startsWith('```') && part.endsWith('```')) {
+      const firstLineEnd = part.indexOf('\n');
+      let lang = '';
+      let code = '';
+      if (firstLineEnd !== -1) {
+        lang = part.slice(3, firstLineEnd).trim();
+        code = part.slice(firstLineEnd + 1, -3);
+      } else {
+        code = part.slice(3, -3);
+      }
+      return `<div class="chat-code-block"${lang ? ` data-lang="${escapeHtml(lang)}"` : ''}><pre><code>${escapeHtml(code)}</code></pre></div>`;
     }
-    if (trimmed.startsWith('- ')) {
-      return `<div class="chat-bullet"><span class="bullet-dash">-</span> ${escapeHtml(trimmed.slice(2))}</div>`;
-    }
-    if (trimmed === '') {
-      return `<div class="chat-spacer"></div>`;
-    }
-    return `<div>${escapeHtml(line)}</div>`;
-  });
-  return formatted.join('');
+
+    const lines = part.split('\n');
+    return lines.map((line) => {
+      const trimmed = line.trim();
+      if (trimmed.endsWith(':') && !trimmed.startsWith('-') && !trimmed.startsWith('http')) {
+        return `<div class="chat-section-title">${escapeHtml(trimmed)}</div>`;
+      }
+      if (trimmed.startsWith('- ')) {
+        const bulletContent = parseInlineCode(trimmed.slice(2));
+        return `<div class="chat-bullet"><span class="bullet-dash">-</span> ${bulletContent}</div>`;
+      }
+      if (trimmed === '') {
+        return `<div class="chat-spacer"></div>`;
+      }
+      return `<div>${parseInlineCode(line)}</div>`;
+    }).join('');
+  }).join('');
 }
 
 function appendGhostMessage(data) {
