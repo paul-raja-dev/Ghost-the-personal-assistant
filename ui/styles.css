@@ -3,6 +3,37 @@
   margin: 0;
   padding: 0;
   user-select: none;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2b30 transparent;
+}
+
+/* Custom Sleek Scrollbars Globally */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2b30;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f414a;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 body {
@@ -544,4 +575,32 @@ body {
 .history-item-date {
   font-size: 11px;
   color: #64748b;
+}
+
+.history-item-delete {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.14s ease;
+  flex-shrink: 0;
+  margin-left: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.history-item:hover .history-item-delete {
+  opacity: 0.5;
+}
+
+.history-item-delete:hover {
+  opacity: 1 !important;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.14);
 }

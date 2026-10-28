@@ -272,6 +272,28 @@ if (!gotTheLock) {
     });
   });
 
+  ipcMain.handle('ghost:delete-session', async (event, sessionId) => {
+    return new Promise((resolve) => {
+      const rootDir = path.join(__dirname, '..');
+      const venvPython = path.join(rootDir, '.venv', 'bin', 'python');
+      const pythonExec = fs.existsSync(venvPython) ? venvPython : 'python3';
+      const backendScript = path.join(rootDir, 'backend', 'main.py');
+
+      const pyProcess = spawn(pythonExec, [backendScript, '--delete-session', sessionId], { cwd: rootDir });
+      let stdout = '';
+      pyProcess.stdout.on('data', (d) => { stdout += d.toString(); });
+      pyProcess.on('close', () => {
+        try {
+          const res = JSON.parse(stdout.trim());
+          resolve(res);
+        } catch {
+          resolve({ success: false });
+        }
+      });
+      pyProcess.on('error', () => resolve({ success: false }));
+    });
+  });
+
   ipcMain.handle('ghost:close-window', () => {
     saveWindowState();
     app.quit();

@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('ghostAPI', {
   savePosition: () => ipcRenderer.invoke('ghost:save-position'),
   listSessions: () => ipcRenderer.invoke('ghost:list-sessions'),
   loadSession: (id) => ipcRenderer.invoke('ghost:load-session', id),
+  deleteSession: (id) => ipcRenderer.invoke('ghost:delete-session', id),
   onResetFocus: (callback) => ipcRenderer.on('ghost:reset-focus', () => callback()),
 });

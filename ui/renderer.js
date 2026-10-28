@@ -307,10 +307,38 @@ async function toggleHistoryDrawer() {
             <span class="history-item-title">${escapeHtml(sess.title)}</span>
             <span class="history-item-date">${escapeHtml(sess.date)}</span>
           </div>
+          <button class="history-item-delete" title="Delete conversation" aria-label="Delete conversation">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </button>
         `;
         item.addEventListener('click', () => {
           resumeSession(sess.id);
         });
+
+        const btnDelete = item.querySelector('.history-item-delete');
+        if (btnDelete) {
+          btnDelete.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            item.style.opacity = '0.3';
+            item.style.pointerEvents = 'none';
+            try {
+              await window.ghostAPI.deleteSession(sess.id);
+              item.remove();
+              if (historyList.children.length === 0) {
+                historyList.innerHTML = '<div style="color: #64748b; font-size: 12px; padding: 12px;">No past conversations found.</div>';
+              }
+            } catch (err) {
+              console.error('Failed to delete session:', err);
+              item.style.opacity = '1';
+              item.style.pointerEvents = 'auto';
+            }
+          });
+        }
+
         historyList.appendChild(item);
       });
     } catch (err) {
