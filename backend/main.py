@@ -30,6 +30,12 @@ def main() -> None:
             print(json.dumps(loaded or {}, ensure_ascii=False))
             return
 
+        if first_arg == "--delete-session" and len(sys.argv) > 2:
+            sess_id = sys.argv[2].strip()
+            ok = session.delete_session(sess_id)
+            print(json.dumps({"success": ok}, ensure_ascii=False))
+            return
+
         prompt = " ".join(sys.argv[1:])
         result = run_prompt(prompt)
         print(result)

@@ -265,6 +265,23 @@ def load_session_by_id(session_id: str) -> Optional[dict]:
     return target
 
 
+def delete_session(session_id: str) -> bool:
+    """Delete a session from the persistent archive. If active, clear active session."""
+    archive = _load_archive()
+    new_archive = [s for s in archive if s.get("id") != session_id]
+    _save_archive(new_archive)
+
+    # If currently active session matches deleted session, remove active session file
+    if SESSION_FILE.exists():
+        try:
+            active_data = json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+            if active_data.get("id") == session_id:
+                SESSION_FILE.unlink()
+        except Exception:
+            pass
+    return True
+
+
 def get_genai_history() -> List[types.Content]:
     """Convert session turns and rolling summary into google.genai types.Content objects."""
     summary = get_session_summary()
