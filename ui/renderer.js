@@ -26,14 +26,17 @@ function scrollToBottom() {
 function expandWindow() {
   if (!isExpanded) {
     isExpanded = true;
+    barContainer.classList.add('expanded');
     dynamicContent.classList.remove('hidden');
-    window.ghostAPI?.setWindowHeight?.(420, true);
+    window.ghostAPI?.setWindowHeight?.(480, true);
   }
 }
 
 function collapseWindow() {
   isExpanded = false;
+  barContainer.classList.remove('expanded');
   dynamicContent.classList.add('hidden');
+  historyDrawer.classList.add('hidden');
   chatStream.innerHTML = '';
   window.ghostAPI?.setWindowHeight?.(54, true);
 }
@@ -324,6 +327,7 @@ async function submitTask() {
 async function toggleHistoryDrawer() {
   if (historyDrawer.classList.contains('hidden')) {
     expandWindow();
+    barContainer.classList.add('expanded');
     historyDrawer.classList.remove('hidden');
     historyList.innerHTML = '<div style="color: #64748b; font-size: 12px; padding: 12px;">Loading chat history...</div>';
 
@@ -383,6 +387,9 @@ async function toggleHistoryDrawer() {
     }
   } else {
     historyDrawer.classList.add('hidden');
+    if (dynamicContent.classList.contains('hidden') || !chatStream.children.length) {
+      collapseWindow();
+    }
     input.focus();
   }
 }
@@ -390,6 +397,9 @@ async function toggleHistoryDrawer() {
 if (btnCloseDrawer) {
   btnCloseDrawer.addEventListener('click', () => {
     historyDrawer.classList.add('hidden');
+    if (dynamicContent.classList.contains('hidden') || !chatStream.children.length) {
+      collapseWindow();
+    }
     input.focus();
   });
 }

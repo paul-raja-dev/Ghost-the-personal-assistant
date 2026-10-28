@@ -34,7 +34,7 @@ function saveWindowState() {
 function createWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
-  const width = 580;
+  const width = 650;
   const height = 54;
 
   const defaultX = Math.round((screenWidth - width) / 2);
@@ -50,7 +50,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: width,
     height: height,
-    minWidth: 420,
+    minWidth: 460,
     minHeight: 54,
     x: x,
     y: y,

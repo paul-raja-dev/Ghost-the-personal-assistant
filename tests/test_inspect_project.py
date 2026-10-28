@@ -1,4 +1,5 @@
 """Unit tests for Ghost High-Speed Deep Codebase Inspection Engine."""
+import shutil
 import time
 import unittest
 from pathlib import Path
@@ -13,13 +14,38 @@ from tools import system_tools
 
 
 class TestInspectProject(unittest.TestCase):
-    def test_inspect_lowercase_ghost(self):
+    def setUp(self):
+        self.mock_dir = Path("/tmp/mock_tauri_project")
+        if self.mock_dir.exists():
+            shutil.rmtree(self.mock_dir)
+        self.mock_dir.mkdir(parents=True, exist_ok=True)
+
+        # Setup mock Tauri structure
+        tauri_dir = self.mock_dir / "src-tauri"
+        tauri_dir.mkdir(parents=True, exist_ok=True)
+        (tauri_dir / "Cargo.toml").write_text(
+            '[package]\nname = "mock-ghost"\nversion = "0.1.0"\ndescription = "Ghost — Custom Browser Shell"\n',
+            encoding="utf-8"
+        )
+
+        docs_dir = self.mock_dir / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "00-PROJECT-OVERVIEW.md").write_text(
+            "# Ghost — Project Overview\nA custom browser shell built with Tauri v2 (Rust backend).\n",
+            encoding="utf-8"
+        )
+
+    def tearDown(self):
+        if self.mock_dir.exists():
+            shutil.rmtree(self.mock_dir)
+
+    def test_inspect_mock_tauri_project(self):
         t0 = time.perf_counter()
-        res = system_tools.inspect_project("~/Desktop/ghost")
+        res = system_tools.inspect_project(str(self.mock_dir))
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         self.assertEqual(res["status"], "ok")
-        self.assertEqual(res["name"], "ghost")
+        self.assertEqual(res["name"], "mock_tauri_project")
 
         # Must detect Tauri / Rust
         self.assertTrue(any("Tauri" in stack or "Rust" in stack for stack in res["tech_stack"]))
@@ -33,16 +59,13 @@ class TestInspectProject(unittest.TestCase):
         docs = res.get("documentation", {})
         self.assertIn("00-PROJECT-OVERVIEW.md", docs.get("docs_folder_files", []))
 
-        # Must extract git commits
-        git_info = res.get("git", {})
-        self.assertTrue(len(git_info.get("recent_commits", [])) > 0)
-
         # Performance requirement: Sub-50ms execution
         self.assertLess(elapsed_ms, 100.0, f"inspect_project took {elapsed_ms:.2f}ms, expected < 100ms")
 
-    def test_inspect_uppercase_ghost(self):
+    def test_inspect_current_ghost_repo(self):
+        current_repo = Path(__file__).resolve().parent.parent
         t0 = time.perf_counter()
-        res = system_tools.inspect_project("~/Desktop/Ghost")
+        res = system_tools.inspect_project(str(current_repo))
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         self.assertEqual(res["status"], "ok")
