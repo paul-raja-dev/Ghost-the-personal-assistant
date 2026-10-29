@@ -105,11 +105,19 @@ def execute_command(command: str, working_dir: str = "~") -> dict:
             timeout=15,  # 15s timeout to prevent hanging on interactive prompts
             stdin=subprocess.DEVNULL,
         )
+        out = proc.stdout.strip()
+        if len(out) > 4000:
+            out = out[:3900] + "\n\n[... Output truncated at 4000 characters to prevent API rate limits. Use grep/head/tail if specific lines are needed ...]"
+
+        err = proc.stderr.strip()
+        if len(err) > 2000:
+            err = err[:1900] + "\n\n[... Stderr truncated to prevent API rate limits ...]"
+
         return {
             "status": "ok" if proc.returncode == 0 else "error",
             "exit_code": proc.returncode,
-            "stdout": proc.stdout.strip(),
-            "stderr": proc.stderr.strip(),
+            "stdout": out,
+            "stderr": err,
             "working_dir": str(cwd_path),
         }
     except subprocess.TimeoutExpired:

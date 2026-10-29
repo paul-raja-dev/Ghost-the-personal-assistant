@@ -157,7 +157,49 @@ function formatChatText(text) {
   }).join('');
 }
 
+function safeParseEnvelope(input) {
+  if (!input) return { display: 'line', body: '' };
+  let candidate = input;
+
+  // Unpack stringified JSON
+  if (typeof candidate === 'string') {
+    let clean = candidate.trim();
+    if (clean.startsWith('```')) {
+      clean = clean.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    }
+    try {
+      candidate = JSON.parse(clean);
+    } catch {
+      if (clean.includes('\\"') || clean.includes('\\n')) {
+        try {
+          const unescaped = clean.replace(/\\"/g, '"').replace(/\\n/g, '\n');
+          candidate = JSON.parse(unescaped);
+        } catch {}
+      }
+    }
+  }
+
+  // If candidate is a dict and body itself contains an escaped JSON envelope
+  if (candidate && typeof candidate === 'object') {
+    if (typeof candidate.body === 'string') {
+      const b = candidate.body.trim();
+      if ((b.startsWith('{') && b.includes('display')) || (b.startsWith('{\\n') && b.includes('display'))) {
+        try {
+          const inner = safeParseEnvelope(b);
+          if (inner && inner.body && inner.body !== b) {
+            candidate = inner;
+          }
+        } catch {}
+      }
+    }
+    return candidate;
+  }
+
+  return { display: 'line', body: String(input) };
+}
+
 function appendGhostMessage(data) {
+  data = safeParseEnvelope(data);
   const row = document.createElement('div');
   row.className = 'chat-row ghost';
 
@@ -299,13 +341,7 @@ async function submitTask() {
     const rawResult = await window.ghostAPI.runPrompt(prompt);
     removeTypingIndicator();
 
-    let data;
-    try {
-      data = JSON.parse(rawResult);
-    } catch {
-      data = { display: 'line', body: rawResult };
-    }
-
+    const data = safeParseEnvelope(rawResult);
     appendGhostMessage(data);
   } catch (err) {
     removeTypingIndicator();
@@ -416,12 +452,7 @@ async function resumeSession(sessionId) {
       if (turn.role === 'user') {
         appendUserMessage(turn.text);
       } else {
-        let data;
-        try {
-          data = JSON.parse(turn.text);
-        } catch {
-          data = { display: 'line', body: turn.text };
-        }
+        const data = safeParseEnvelope(turn.text);
         appendGhostMessage(data);
       }
     });

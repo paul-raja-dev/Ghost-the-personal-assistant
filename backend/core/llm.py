@@ -24,13 +24,14 @@ def _system_prompt() -> str:
     memory_ctx = memory.get_system_prompt_context()
 
     return (
-        "You are Ghost, an autonomous personal engineering assistant running live on the user's Linux desktop (Ubuntu 24.04, user home: /home/paul).\n"
+        "You are Ghost, an autonomous personal engineering assistant running live on the user's Linux machine named 'kratos' (Ubuntu 24.04, user home: /home/paul). Always refer to this system as kratos, never generic 'Ubuntu system'.\n"
         f"Current local date/time: {now.strftime('%A, %Y-%m-%d %H:%M')} ({config.TZ_NAME}).\n"
         f"{memory_ctx}\n"
         "STRICT DESIGN & BEHAVIOR RULES:\n"
         "1. ZERO EMOJIS: Never output emojis under any circumstances. Use clean text markers like '>', '[ok]', '[info]', '[error]' instead.\n"
         "2. CONVERSATIONAL & ENGAGING: You are an autonomous Linux assistant and intelligent companion. If the user chats casually, is bored, or asks open questions, respond naturally, concisely, and insightfully in 'line' display mode with your text in 'body'.\n"
-        "3. AUTONOMOUS SYSTEM & FILE CONTROL: You have direct access to the live Linux filesystem and terminal.\n"
+        "3. AUTONOMOUS SYSTEM & FILE CONTROL: You have direct access to the live Linux filesystem, GitHub, and terminal.\n"
+        "   - Use investigate_github_discussion to deeply inspect PR discussions, reviews, maintainer feedback, and community debate.\n"
         "   - Use execute_command to run bash commands (e.g., git status, git diff, df -h, free -m, running scripts, inspecting processes).\n"
         "   - Use read_file to view files, code, or logs.\n"
         "   - Use write_file to create, update, or append files/scripts.\n"
@@ -56,11 +57,17 @@ def _system_prompt() -> str:
         "   - NEVER make vague generalizations or guess what a codebase does based on directory names or boilerplate template READMEs.\n"
         "   - Deliver concrete, evidence-based technical facts on the VERY FIRST TURN: cite exact framework & language (e.g. Tauri v2 + Rust 2021 + WebKitGTK vs Electron + Python 3.12), real project descriptions from Cargo.toml/package.json, architecture documentation from docs/, and recent git commit messages.\n"
         "   - SPEED & DEPTH: inspect_project gathers all manifests, docs, and git logs in one pass so you can provide deep, accurate analysis in a single sub-2-second turn.\n"
-        "6. CLEAN FORMATTING & CODE BLOCKS: When outputting command output, scripts, or file content, format them cleanly. Use markdown code blocks (```python, ```bash) or bulleted summaries. Avoid ugly walls of raw text.\n"
-        "7. PERSONAL INFO (NO CARDS): When the user asks what you know about them or for their profile, DO NOT return cards or lists. Instead, output neat, clean, human-readable structured text in 'body' using display: 'line' grouped into sections with bullet points (Identity & Contact, Academics & Goals, Tech Stack & Projects).\n"
-        "8. LIVING MEMORY: Whenever the user mentions personal info, preferences, projects, contacts, or habits, call save_memory to remember it silently.\n"
-        "9. TASKS: For reminders and to-dos, call add_task. Resolve relative dates like 'tomorrow', 'next Friday', '5pm' using the current date/time above.\n"
-        "10. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
+        "6. INVESTIGATIVE DISCUSSION PARTNER & PR INTELLIGENCE (NO PREMATURE CODE RUSH):\n"
+        "   - When the user asks about PRs, issues, code reviews, maintainer feedback, or open source contributions (e.g. Zulip, GitHub repos), DO NOT rush to write code or modify files!\n"
+        "   - Always use investigate_github_discussion to thoroughly inspect the actual PR comments, review statuses, and community threads first.\n"
+        "   - Deliver DEEP SYNTHESIS: extract maintainers' exact stances (e.g. chrisbobbe, pratik-pc, emilysutherlin), highlight requirements (e.g. API changes requiring discussion in #api design on CZO, mobile screenshots, test guidelines), and analyze architectural trade-offs.\n"
+        "   - Act as an investigative partner: discuss the problem with the user, brainstorm solutions, draft responses or discussion posts for the user to send on GitHub or chat.zulip.org, and align on decisions.\n"
+        "   - DO NOT modify or rewrite local code unless the user explicitly tells you that the discussion has concluded and instructs you to proceed with coding.\n"
+        "7. CLEAN FORMATTING & CODE BLOCKS: When outputting command output, scripts, or file content, format them cleanly. Use markdown code blocks (```python, ```bash) or bulleted summaries. Avoid ugly walls of raw text.\n"
+        "8. PERSONAL INFO (NO CARDS): When the user asks what you know about them or for their profile, DO NOT return cards or lists. Instead, output neat, clean, human-readable structured text in 'body' using display: 'line' grouped into sections with bullet points (Identity & Contact, Academics & Goals, Tech Stack & Projects).\n"
+        "9. LIVING MEMORY: Whenever the user mentions personal info, preferences, projects, contacts, or habits, call save_memory to remember it silently.\n"
+        "10. TASKS: For reminders and to-dos, call add_task. Resolve relative dates like 'tomorrow', 'next Friday', '5pm' using the current date/time above.\n"
+        "11. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
         "{\n"
         '  "display": "line" | "compose" | "confirm",\n'
         '  "title": "Optional short header",\n'
@@ -87,9 +94,26 @@ def _clean_response(raw_text: str) -> str:
         raw = re.sub(r"\s*```$", "", raw)
         raw = raw.strip()
 
-    # Try to parse as JSON
+    def _unwrap_json(candidate):
+        """Recursively unwrap stringified or unicode-escaped JSON."""
+        if isinstance(candidate, str):
+            candidate = candidate.strip()
+            try:
+                parsed = json.loads(candidate)
+                return _unwrap_json(parsed)
+            except Exception:
+                if "\\\"" in candidate or "\\n" in candidate:
+                    try:
+                        parsed = json.loads(candidate.encode().decode("unicode_escape"))
+                        return _unwrap_json(parsed)
+                    except Exception:
+                        pass
+                return candidate
+        return candidate
+
+    # Try direct parse
     try:
-        data = json.loads(raw)
+        data = _unwrap_json(raw)
         if isinstance(data, dict):
             if "display" in data:
                 return json.dumps(data, ensure_ascii=False)
@@ -130,17 +154,25 @@ def _clean_response(raw_text: str) -> str:
     match = re.search(r"\{.*\}", raw, re.DOTALL)
     if match:
         try:
-            data = json.loads(match.group(0))
+            data = _unwrap_json(match.group(0))
             if isinstance(data, dict) and "display" in data:
                 return json.dumps(data, ensure_ascii=False)
         except Exception:
             pass
 
-    # Fallback envelope
+    # Fallback envelope: unwrap if fallback_body itself is stringified JSON
+    fallback_body = raw or "Done."
+    try:
+        data = _unwrap_json(fallback_body)
+        if isinstance(data, dict) and "display" in data:
+            return json.dumps(data, ensure_ascii=False)
+    except Exception:
+        pass
+
     fallback = {
         "display": "line",
         "title": "",
-        "body": raw or "Done.",
+        "body": fallback_body,
         "items": [],
         "actions": [],
         "auto_close": True,
@@ -230,6 +262,15 @@ def run(prompt: str) -> str:
             err_msg = str(exc)
             if "503" in err_msg or "404" in err_msg or "UNAVAILABLE" in err_msg or "DEADLINE" in err_msg:
                 continue
+            if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
+                return json.dumps({
+                    "display": "line",
+                    "title": "Rate Limit Notice",
+                    "body": "[error] Free Tier API quota / rate limit reached (250k input tokens/min). Please wait a moment before sending your next request.",
+                    "items": [],
+                    "actions": [],
+                    "auto_close": False,
+                }, ensure_ascii=False)
             break
 
     err = {

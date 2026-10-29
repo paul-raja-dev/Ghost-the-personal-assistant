@@ -1,6 +1,7 @@
 """Legacy wrapper redirecting to backend.tools package."""
 from tools import (
     TOOLS,
+    investigate_github_discussion,
     add_task,
     save_memory,
     recall_memories,
@@ -10,6 +11,7 @@ from tools import (
 
 __all__ = [
     "TOOLS",
+    "investigate_github_discussion",
     "add_task",
     "save_memory",
     "recall_memories",

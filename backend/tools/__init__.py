@@ -13,8 +13,11 @@ from .system_tools import (
     get_system_status,
     inspect_project,
 )
+from .github_tools import investigate_github_discussion
 
 TOOLS = [
+    # GitHub PR & Issue Discussion Investigation
+    investigate_github_discussion,
     # System & Live Filesystem Operations
     execute_command,
     read_file,
@@ -36,6 +39,7 @@ TOOLS = [
 
 __all__ = [
     "TOOLS",
+    "investigate_github_discussion",
     "execute_command",
     "read_file",
     "write_file",
