@@ -482,7 +482,6 @@ window.addEventListener('keydown', (e) => {
       return;
     }
     window.ghostAPI?.closeWindow?.();
-    resetState();
     return;
   }
 

@@ -9,6 +9,7 @@ app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('ozone-platform', 'x11');
 
 let mainWindow = null;
+let resizeInterval = null;
 const stateFile = path.join(os.homedir(), '.config', 'ghost', 'window-state.json');
 
 function loadWindowState() {
@@ -141,6 +142,14 @@ function createWindow() {
     menu.append(new MenuItem({ label: 'Select All', role: 'selectAll' }));
     menu.popup({ window: mainWindow, x: params.x, y: params.y });
   });
+
+  mainWindow.on('closed', () => {
+    if (resizeInterval) {
+      clearInterval(resizeInterval);
+      resizeInterval = null;
+    }
+    mainWindow = null;
+  });
 }
 
 // Single instance handling
@@ -150,16 +159,15 @@ if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       if (!mainWindow.isVisible()) mainWindow.show();
       mainWindow.focus();
       mainWindow.webContents.send('ghost:reset-focus');
     }
   });
 
-  let resizeInterval = null;
   ipcMain.handle('ghost:set-height', (event, newHeight, animate = false) => {
-    if (!mainWindow) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
     if (resizeInterval) {
       clearInterval(resizeInterval);
       resizeInterval = null;
@@ -169,7 +177,7 @@ if (!gotTheLock) {
     if (currentH === newHeight) return;
 
     if (!animate) {
-      mainWindow.setSize(w, newHeight);
+      if (!mainWindow.isDestroyed()) mainWindow.setSize(w, newHeight);
       return;
     }
 
@@ -180,13 +188,19 @@ if (!gotTheLock) {
     let step = 0;
 
     resizeInterval = setInterval(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        if (resizeInterval) clearInterval(resizeInterval);
+        resizeInterval = null;
+        return;
+      }
+
       step++;
       if (step >= stepCount) {
         clearInterval(resizeInterval);
         resizeInterval = null;
-        if (mainWindow) mainWindow.setSize(w, newHeight);
+        if (!mainWindow.isDestroyed()) mainWindow.setSize(w, newHeight);
       } else {
-        if (mainWindow) {
+        if (!mainWindow.isDestroyed()) {
           const target = Math.round(currentH + stepH * step);
           mainWindow.setSize(w, target);
         }
@@ -295,6 +309,10 @@ if (!gotTheLock) {
   });
 
   ipcMain.handle('ghost:close-window', () => {
+    if (resizeInterval) {
+      clearInterval(resizeInterval);
+      resizeInterval = null;
+    }
     saveWindowState();
     app.quit();
   });
