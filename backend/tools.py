@@ -1,6 +1,8 @@
 """Legacy wrapper redirecting to backend.tools package."""
 from tools import (
     TOOLS,
+    capture_and_inspect_screen,
+    inspect_image_file,
     investigate_github_discussion,
     add_task,
     save_memory,
@@ -11,6 +13,8 @@ from tools import (
 
 __all__ = [
     "TOOLS",
+    "capture_and_inspect_screen",
+    "inspect_image_file",
     "investigate_github_discussion",
     "add_task",
     "save_memory",

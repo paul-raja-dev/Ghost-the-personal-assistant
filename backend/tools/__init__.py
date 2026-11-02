@@ -14,8 +14,12 @@ from .system_tools import (
     inspect_project,
 )
 from .github_tools import investigate_github_discussion
+from .vision_tools import capture_and_inspect_screen, inspect_image_file
 
 TOOLS = [
+    # Vision & Screen Awareness
+    capture_and_inspect_screen,
+    inspect_image_file,
     # GitHub PR & Issue Discussion Investigation
     investigate_github_discussion,
     # System & Live Filesystem Operations
@@ -39,6 +43,8 @@ TOOLS = [
 
 __all__ = [
     "TOOLS",
+    "capture_and_inspect_screen",
+    "inspect_image_file",
     "investigate_github_discussion",
     "execute_command",
     "read_file",
