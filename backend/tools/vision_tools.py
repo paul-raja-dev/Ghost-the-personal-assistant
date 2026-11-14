@@ -2,6 +2,7 @@
 Enables Ghost to autonomously capture and inspect the user's screen via gnome-screenshot
 and analyze local image files using Gemini Multimodal Vision.
 """
+import base64
 import os
 import subprocess
 import sys
@@ -14,8 +15,7 @@ if str(backend_root) not in sys.path:
     sys.path.insert(0, str(backend_root))
 
 import config
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 
 def capture_and_inspect_screen(focus_instruction: str = "") -> dict:
@@ -83,49 +83,66 @@ def capture_and_inspect_screen(focus_instruction: str = "") -> dict:
             "message": "Captured screen image was empty.",
         }
 
-    # Analyze screenshot with Gemini Vision
-    try:
-        client = genai.Client(
-            api_key=config.GEMINI_API_KEY,
-            http_options=types.HttpOptions(timeout=20_000),
-        )
-        model_name = config.GEMINI_MODEL or "gemini-3.5-flash-lite"
+    # Universal Vision analysis using Base64 Data URL (OpenAI standard)
+    vision_instruction = (
+        "You are Ghost's Vision System on the user's Linux machine 'kratos'.\n"
+        "Analyze this live screen capture accurately. Provide a technical, structured summary with clean bullet points and ZERO EMOJIS:\n"
+        "- Active Applications & Windows: List main apps open (e.g. VS Code, terminal, browser, system dialogs) and their window titles.\n"
+        "- Visible Text, Code & Errors: Transcribe any critical error traces, terminal logs, code snippets, or UI messages visible on screen.\n"
+        f"- Specific Focus: {focus_instruction or 'Identify what the user is working on and diagnose any visible issues or anomalies.'}\n"
+        "Be precise and direct."
+    )
 
-        vision_instruction = (
-            "You are Ghost's Vision System on the user's Linux machine 'kratos'.\n"
-            "Analyze this live screen capture accurately. Provide a technical, structured summary with clean bullet points and ZERO EMOJIS:\n"
-            "- Active Applications & Windows: List main apps open (e.g. VS Code, terminal, browser, system dialogs) and their window titles.\n"
-            "- Visible Text, Code & Errors: Transcribe any critical error traces, terminal logs, code snippets, or UI messages visible on screen.\n"
-            f"- Specific Focus: {focus_instruction or 'Identify what the user is working on and diagnose any visible issues or anomalies.'}\n"
-            "Be precise and direct."
-        )
-
-        resp = client.models.generate_content(
-            model=model_name,
-            contents=[
-                types.Part.from_bytes(data=img_bytes, mime_type="image/png"),
-                vision_instruction,
+    b64_image = base64.b64encode(img_bytes).decode("utf-8")
+    vision_messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": vision_instruction},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_image}"}},
             ],
-            config=types.GenerateContentConfig(
-                temperature=0,
-            ),
-        )
+        }
+    ]
 
-        analysis = (resp.text or "").strip()
-        return {
-            "status": "ok",
-            "focus": focus_instruction or "general screen inspection",
-            "visual_observations": analysis,
-        }
-    except Exception as exc:
-        return {
-            "status": "error",
-            "message": f"Gemini Vision analysis failed: {exc}",
-        }
+    # Try primary provider, fallback to Gemini
+    providers_to_try = []
+    if config.LLM_API_KEY:
+        providers_to_try.append({
+            "client": OpenAI(base_url=config.LLM_BASE_URL, api_key=config.LLM_API_KEY, timeout=25.0),
+            "model": config.LLM_MODEL,
+        })
+    if config.GEMINI_API_KEY and (config.LLM_BASE_URL != config.GEMINI_BASE_URL or config.LLM_MODEL != config.GEMINI_MODEL):
+        providers_to_try.append({
+            "client": OpenAI(base_url=config.GEMINI_BASE_URL, api_key=config.GEMINI_API_KEY, timeout=25.0),
+            "model": config.GEMINI_MODEL or "gemini-3.5-flash-lite",
+        })
+
+    last_exc = None
+    for p in providers_to_try:
+        try:
+            resp = p["client"].chat.completions.create(
+                model=p["model"],
+                messages=vision_messages,
+                temperature=0,
+            )
+            analysis = (resp.choices[0].message.content or "").strip()
+            return {
+                "status": "ok",
+                "focus": focus_instruction or "general screen inspection",
+                "visual_observations": analysis,
+            }
+        except Exception as exc:
+            last_exc = exc
+            continue
+
+    return {
+        "status": "error",
+        "message": f"Vision analysis failed: {last_exc}",
+    }
 
 
 def inspect_image_file(image_path: str, instruction: str = "") -> dict:
-    """Inspect and analyze any local image file on kratos using Gemini Vision.
+    """Inspect and analyze any local image file on kratos using Vision.
 
     Args:
         image_path: Path to the image file (supports '~' expansion, e.g. '~/Desktop/screenshot.png').
@@ -134,10 +151,10 @@ def inspect_image_file(image_path: str, instruction: str = "") -> dict:
     Returns:
         Structured visual analysis, OCR transcription, and answers to the query.
     """
-    if not config.GEMINI_API_KEY:
+    if not config.LLM_API_KEY and not config.GEMINI_API_KEY:
         return {
             "status": "error",
-            "message": "Missing GEMINI_API_KEY in configuration.",
+            "message": "Missing API key in configuration.",
         }
 
     clean_path = image_path.strip().strip("'\"")
@@ -170,37 +187,58 @@ def inspect_image_file(image_path: str, instruction: str = "") -> dict:
         if not img_bytes:
             return {"status": "error", "message": "Image file is empty (0 bytes)."}
 
-        client = genai.Client(
-            api_key=config.GEMINI_API_KEY,
-            http_options=types.HttpOptions(timeout=20_000),
-        )
-        model_name = config.GEMINI_MODEL or "gemini-3.5-flash-lite"
-
+        b64_image = base64.b64encode(img_bytes).decode("utf-8")
         vision_instruction = (
             "You are Ghost's Vision System on Linux machine 'kratos'.\n"
             f"Analyze this image file ('{path_obj.name}') in detail. Zero emojis.\n"
             f"Instruction: {instruction or 'Describe the image, extract any visible text/code, and summarize key elements.'}\n"
         )
+        vision_messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": vision_instruction},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64_image}"}},
+                ],
+            }
+        ]
 
-        resp = client.models.generate_content(
-            model=model_name,
-            contents=[
-                types.Part.from_bytes(data=img_bytes, mime_type=mime),
-                vision_instruction,
-            ],
-            config=types.GenerateContentConfig(
-                temperature=0,
-            ),
-        )
+        providers_to_try = []
+        if config.LLM_API_KEY:
+            providers_to_try.append({
+                "client": OpenAI(base_url=config.LLM_BASE_URL, api_key=config.LLM_API_KEY, timeout=25.0),
+                "model": config.LLM_MODEL,
+            })
+        if config.GEMINI_API_KEY and (config.LLM_BASE_URL != config.GEMINI_BASE_URL or config.LLM_MODEL != config.GEMINI_MODEL):
+            providers_to_try.append({
+                "client": OpenAI(base_url=config.GEMINI_BASE_URL, api_key=config.GEMINI_API_KEY, timeout=25.0),
+                "model": config.GEMINI_MODEL or "gemini-3.5-flash-lite",
+            })
+
+        last_exc = None
+        for p in providers_to_try:
+            try:
+                resp = p["client"].chat.completions.create(
+                    model=p["model"],
+                    messages=vision_messages,
+                    temperature=0,
+                )
+                return {
+                    "status": "ok",
+                    "file_name": path_obj.name,
+                    "file_path": str(path_obj),
+                    "analysis": (resp.choices[0].message.content or "").strip(),
+                }
+            except Exception as exc:
+                last_exc = exc
+                continue
 
         return {
-            "status": "ok",
-            "file_name": path_obj.name,
-            "file_path": str(path_obj),
-            "analysis": (resp.text or "").strip(),
+            "status": "error",
+            "message": f"Failed to analyze image file: {last_exc}",
         }
     except Exception as exc:
         return {
             "status": "error",
-            "message": f"Failed to analyze image file: {exc}",
+            "message": f"Failed to read image file: {exc}",
         }

@@ -6,8 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 # Ensure backend root is in sys.path
 backend_root = Path(__file__).resolve().parent.parent
@@ -17,6 +16,7 @@ if str(backend_root) not in sys.path:
 import config
 from core import memory, session
 import tools
+from tools import schemas
 
 
 def _system_prompt() -> str:
@@ -225,59 +225,111 @@ def run(prompt: str) -> str:
                 "auto_close": False,
             }, ensure_ascii=False)
 
-    if not config.GEMINI_API_KEY:
+    if not config.LLM_API_KEY and not config.GEMINI_API_KEY:
         err = {
             "display": "line",
             "title": "Configuration Error",
-            "body": "Missing GEMINI_API_KEY in .env",
+            "body": "Missing API key (GEMINI_API_KEY or LLM_API_KEY) in .env",
             "items": [],
             "actions": [],
             "auto_close": False,
         }
         return json.dumps(err)
 
-    candidate_models = []
-    for m in [config.GEMINI_MODEL, "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]:
-        if m and m not in candidate_models:
-            candidate_models.append(m)
+    # Build standard OpenAI messages list
+    messages = [{"role": "system", "content": _system_prompt()}]
+    summary = session.get_session_summary()
+    if summary:
+        messages.append({
+            "role": "user",
+            "content": f"[Context Summary of earlier conversation turns:\n{summary}]",
+        })
+        messages.append({
+            "role": "assistant",
+            "content": "[ok] Context acknowledged. I have full context of our earlier discussion.",
+        })
 
-    client = genai.Client(
-        api_key=config.GEMINI_API_KEY,
-        http_options=types.HttpOptions(timeout=10_000),
-    )
+    for turn in session.load_session():
+        role = "assistant" if turn.get("role") == "model" else turn.get("role", "user")
+        text = turn.get("text", "")
+        if text:
+            messages.append({"role": role, "content": text})
 
-    history = session.get_genai_history()
+    messages.append({"role": "user", "content": prompt})
+
+    openai_tools = schemas.get_openai_tools()
+
+    # Configure provider candidates (primary configured provider + Gemini fallback)
+    providers_to_try = []
+
+    # 1. Primary provider
+    if config.LLM_API_KEY:
+        providers_to_try.append({
+            "name": config.LLM_PROVIDER,
+            "client": OpenAI(base_url=config.LLM_BASE_URL, api_key=config.LLM_API_KEY, timeout=25.0),
+            "model": config.LLM_MODEL,
+        })
+
+    # 2. Seamless Gemini Fallback if primary is a different provider
+    if config.GEMINI_API_KEY:
+        is_already_primary = (
+            config.LLM_BASE_URL == config.GEMINI_BASE_URL
+            and config.LLM_MODEL == config.GEMINI_MODEL
+        )
+        if not is_already_primary:
+            providers_to_try.append({
+                "name": "gemini-fallback",
+                "client": OpenAI(base_url=config.GEMINI_BASE_URL, api_key=config.GEMINI_API_KEY, timeout=25.0),
+                "model": config.GEMINI_MODEL or "gemini-3.5-flash-lite",
+            })
+
     last_exc = None
-    for model_name in candidate_models:
+    for p_cfg in providers_to_try:
         try:
-            chat = client.chats.create(
-                model=model_name,
-                history=history,
-                config=types.GenerateContentConfig(
-                    system_instruction=_system_prompt(),
-                    tools=tools.TOOLS,
+            curr_messages = list(messages)
+            client = p_cfg["client"]
+            model_name = p_cfg["model"]
+
+            # Tool execution loop (up to 10 iterations)
+            for _ in range(10):
+                resp = client.chat.completions.create(
+                    model=model_name,
+                    messages=curr_messages,
+                    tools=openai_tools,
                     temperature=0,
-                ),
-            )
-            resp = chat.send_message(prompt)
-            final_json = _clean_response(resp.text)
-            session.record_turn(prompt, final_json)
-            return final_json
+                )
+                choice = resp.choices[0]
+                msg = choice.message
+
+                # If no tool calls, return final response
+                if not msg.tool_calls:
+                    final_json = _clean_response(msg.content or "")
+                    session.record_turn(prompt, final_json)
+                    return final_json
+
+                # Execute requested tools locally on kratos
+                curr_messages.append(msg)
+                for tc in msg.tool_calls:
+                    res_data = schemas.dispatch_tool_call(tc.function.name, tc.function.arguments)
+                    curr_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": json.dumps(res_data, ensure_ascii=False),
+                    })
+
         except Exception as exc:
             last_exc = exc
             err_msg = str(exc)
-            if "503" in err_msg or "404" in err_msg or "UNAVAILABLE" in err_msg or "DEADLINE" in err_msg:
-                continue
             if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
                 return json.dumps({
                     "display": "line",
                     "title": "Rate Limit Notice",
-                    "body": "[error] Free Tier API quota / rate limit reached (250k input tokens/min). Please wait a moment before sending your next request.",
+                    "body": "[error] Free Tier API quota / rate limit reached. Please wait a moment before sending your next request.",
                     "items": [],
                     "actions": [],
                     "auto_close": False,
                 }, ensure_ascii=False)
-            break
+            continue
 
     err = {
         "display": "line",
