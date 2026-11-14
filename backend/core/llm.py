@@ -73,18 +73,36 @@ def _system_prompt() -> str:
         "9. PERSONAL INFO (NO CARDS): When the user asks what you know about them or for their profile, DO NOT return cards or lists. Instead, output neat, clean, human-readable structured text in 'body' using display: 'line' grouped into sections with bullet points (Identity & Contact, Academics & Goals, Tech Stack & Projects).\n"
         "10. LIVING MEMORY: Whenever the user mentions personal info, preferences, projects, contacts, or habits, call save_memory to remember it silently.\n"
         "11. TASKS: For reminders and to-dos, call add_task. Resolve relative dates like 'tomorrow', 'next Friday', '5pm' using the current date/time above.\n"
-        "12. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
+        "12. MULTI-ACCOUNT EMAIL & INTERACTIVE CARDS:\n"
+        "   - You have full email capabilities across multiple accounts on kratos via list_inbox, read_email_details, stage_email_send, and configure_email_account.\n"
+        "   - SMART ACCOUNT ROUTING:\n"
+        "     * When the user mentions 'personal', 'friends', 'private', or personal activities, route to account='personal'.\n"
+        "     * When the user mentions 'work', 'job', 'interview', 'recruiter', 'client', 'career', 'professional', route to account='work'.\n"
+        "     * When checking email without specifying an account, use account='all' to check both inboxes.\n"
+        "   - MANDATORY DISPLAY MODES FOR EMAIL:\n"
+        "     * When presenting a list of emails (from list_inbox), NEVER dump them as a raw wall of text. Use display: 'email_list' with an 'emails' array containing objects with {id, account, account_name, from, subject, date, snippet, unread}.\n"
+        "     * When drafting an email for the user (or after calling stage_email_send), ALWAYS return display: 'email_compose' with {account, to, subject, body, actions: [{id: 'send', label: 'Send Email', type: 'primary', payload: 'confirm: send_email <ticket_id>'}, {id: 'copy', label: 'Copy Draft', type: 'secondary'}, {id: 'discard', label: 'Discard', type: 'danger'}]}.\n"
+        "   - MANDATORY 2-STEP SEND CONFIRMATION:\n"
+        "     * You CANNOT send emails directly. You MUST call stage_email_send(account, to, subject, body) first, which generates a safety ticket.\n"
+        "     * The user reviews the email in the Email Composer Card and clicks 'Send Email' to execute dispatch.\n"
+        "13. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
         "{\n"
-        '  "display": "line" | "compose" | "confirm",\n'
+        '  "display": "line" | "compose" | "confirm" | "email_list" | "email_compose",\n'
         '  "title": "Optional short header",\n'
         '  "body": "Main concise message or formatted text",\n'
         '  "items": [],\n'
+        '  "emails": [],\n'
+        '  "account": "personal | work",\n'
+        '  "to": "recipient email (for compose)",\n'
+        '  "subject": "email subject (for compose)",\n'
         '  "actions": [ {"id": "confirm", "label": "Confirm", "type": "primary"} ],\n'
         '  "auto_close": true | false\n'
         "}\n"
         "DISPLAY RULES:\n"
         "- 'line': Default for conversation, direct answers, command results, file views, and clean text reports. Set auto_close: false if multi-line or informational; true for 1-line confirmations.\n"
-        "- 'compose': When the user asks to write/draft an email or document. Put the draft in 'body'. Set auto_close: false.\n"
+        "- 'compose': When the user asks to write/draft a document or note. Put the draft in 'body'. Set auto_close: false.\n"
+        "- 'email_list': When showing inbox emails. Pass the email objects in 'emails'. Set auto_close: false.\n"
+        "- 'email_compose': When drafting an email. Populate 'account', 'to', 'subject', 'body', and include send/copy/discard actions. Set auto_close: false.\n"
         "- 'confirm': When an action requires user approval (e.g. moving files to Trash). Set auto_close: false.\n"
         "Output ONLY the JSON object. Do not wrap in markdown code blocks like ```json."
     )
@@ -219,6 +237,53 @@ def run(prompt: str) -> str:
             return json.dumps({
                 "display": "line",
                 "title": "Trash Notice",
+                "body": f"[error] {res.get('message')}",
+                "items": [],
+                "actions": [],
+                "auto_close": False,
+            }, ensure_ascii=False)
+
+    # Intercept confirmed email send actions directly
+    if lower_p.startswith("confirm: send_email "):
+        raw_payload = clean_p[len("confirm: send_email "):].strip()
+        ticket_id = raw_payload
+        override_to = None
+        override_sub = None
+        override_body = None
+        override_acc = None
+
+        if raw_payload.startswith("{") and raw_payload.endswith("}"):
+            try:
+                ticket_info = json.loads(raw_payload)
+                ticket_id = ticket_info.get("ticket_id", "")
+                override_to = ticket_info.get("to")
+                override_sub = ticket_info.get("subject")
+                override_body = ticket_info.get("body")
+                override_acc = ticket_info.get("account")
+            except Exception:
+                pass
+
+        from tools import email_tools
+        res = email_tools.execute_confirmed_send(
+            ticket_id,
+            to=override_to,
+            subject=override_sub,
+            body=override_body,
+            account=override_acc,
+        )
+        if res.get("status") == "ok":
+            return json.dumps({
+                "display": "line",
+                "title": "Email Sent",
+                "body": f"[ok] {res.get('message')}",
+                "items": [],
+                "actions": [],
+                "auto_close": False,
+            }, ensure_ascii=False)
+        else:
+            return json.dumps({
+                "display": "line",
+                "title": "Email Send Notice",
                 "body": f"[error] {res.get('message')}",
                 "items": [],
                 "actions": [],

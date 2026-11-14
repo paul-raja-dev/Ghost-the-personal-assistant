@@ -15,8 +15,20 @@ from .system_tools import (
 )
 from .github_tools import investigate_github_discussion
 from .vision_tools import capture_and_inspect_screen, inspect_image_file
+from .email_tools import (
+    list_inbox,
+    read_email_details,
+    stage_email_send,
+    configure_email_account,
+    execute_confirmed_send,
+)
 
 TOOLS = [
+    # Multi-Account Email
+    list_inbox,
+    read_email_details,
+    stage_email_send,
+    configure_email_account,
     # Vision & Screen Awareness
     capture_and_inspect_screen,
     inspect_image_file,
@@ -43,6 +55,11 @@ TOOLS = [
 
 __all__ = [
     "TOOLS",
+    "list_inbox",
+    "read_email_details",
+    "stage_email_send",
+    "configure_email_account",
+    "execute_confirmed_send",
     "capture_and_inspect_screen",
     "inspect_image_file",
     "investigate_github_discussion",

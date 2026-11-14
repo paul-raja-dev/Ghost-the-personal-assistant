@@ -211,7 +211,7 @@ function appendGhostMessage(data) {
   const titleText = data.title || '';
 
   // Main clean formatted text body
-  if (bodyText) {
+  if (bodyText && mode !== 'email_compose') {
     const textEl = document.createElement('div');
     textEl.className = 'chat-text';
     textEl.innerHTML = formatChatText(bodyText);
@@ -223,7 +223,7 @@ function appendGhostMessage(data) {
     bubble.appendChild(textEl);
   }
 
-  // 1. Compose Widget (email draft, note draft)
+  // 1. Generic Compose Widget (notes, general documents)
   if (mode === 'compose') {
     const composeWidget = document.createElement('div');
     composeWidget.className = 'widget-compose';
@@ -256,6 +256,240 @@ function appendGhostMessage(data) {
     composeWidget.appendChild(textarea);
     composeWidget.appendChild(actions);
     bubble.appendChild(composeWidget);
+  }
+
+  // 2. Email List Card (Inbox Stream with Account Badges, Snippet Previews, Quick Reply)
+  if (mode === 'email_list') {
+    const emailListCard = document.createElement('div');
+    emailListCard.className = 'email-list-card';
+
+    const cardHeader = document.createElement('div');
+    cardHeader.className = 'email-card-header';
+
+    const headerTitle = document.createElement('div');
+    headerTitle.className = 'email-card-title';
+    headerTitle.innerHTML = `<span class="email-icon">@</span> <span>${escapeHtml(titleText || 'Inbox Stream')}</span>`;
+
+    const emails = Array.isArray(data.emails) ? data.emails : [];
+    const headerMeta = document.createElement('span');
+    headerMeta.className = 'email-card-badge';
+    headerMeta.textContent = `${emails.length} ${emails.length === 1 ? 'message' : 'messages'}`;
+
+    cardHeader.appendChild(headerTitle);
+    cardHeader.appendChild(headerMeta);
+    emailListCard.appendChild(cardHeader);
+
+    const emailListBody = document.createElement('div');
+    emailListBody.className = 'email-items-container';
+
+    if (emails.length === 0) {
+      const emptyNotice = document.createElement('div');
+      emptyNotice.className = 'email-empty-state';
+      emptyNotice.textContent = 'No messages found in configured inboxes.';
+      emailListBody.appendChild(emptyNotice);
+    } else {
+      emails.forEach((item) => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'email-item' + (item.unread ? ' unread' : '');
+
+        // Account badge: personal vs work
+        const isWork = (item.account || '').toLowerCase().includes('work') || (item.account_name || '').toLowerCase().includes('prof');
+        const badgeClass = isWork ? 'email-badge-work' : 'email-badge-personal';
+        const badgeLabel = escapeHtml(item.account_name || (isWork ? 'Work' : 'Personal'));
+
+        itemEl.innerHTML = `
+          <div class="email-item-header">
+            <div class="email-item-sender-group">
+              <span class="email-pill ${badgeClass}">${badgeLabel}</span>
+              <span class="email-sender" title="${escapeHtml(item.from || '')}">${escapeHtml(item.from || 'Unknown')}</span>
+            </div>
+            <span class="email-date">${escapeHtml(item.date || '')}</span>
+          </div>
+          <div class="email-subject">${escapeHtml(item.subject || '(No Subject)')}</div>
+          <div class="email-snippet">${escapeHtml(item.snippet || '')}</div>
+          <div class="email-item-actions">
+            <button class="email-action-btn email-btn-reply" title="Reply to this email">Reply</button>
+            <button class="email-action-btn email-btn-read" title="Read full message">Read Full</button>
+          </div>
+        `;
+
+        // Wire Reply button
+        const btnReply = itemEl.querySelector('.email-btn-reply');
+        if (btnReply) {
+          btnReply.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const replyTo = item.from || '';
+            const replySub = item.subject?.startsWith('Re:') ? item.subject : `Re: ${item.subject || ''}`;
+            input.value = `Draft an email reply to ${replyTo} regarding "${replySub}" from my ${item.account || 'personal'} account`;
+            submitTask();
+          });
+        }
+
+        // Wire Read Full button
+        const btnRead = itemEl.querySelector('.email-btn-read');
+        if (btnRead) {
+          btnRead.addEventListener('click', (e) => {
+            e.stopPropagation();
+            input.value = `Read email ID ${item.id} from account ${item.account}`;
+            submitTask();
+          });
+        }
+
+        // Toggle snippet expansion on click
+        itemEl.addEventListener('click', () => {
+          itemEl.classList.toggle('expanded');
+        });
+
+        emailListBody.appendChild(itemEl);
+      });
+    }
+
+    emailListCard.appendChild(emailListBody);
+    bubble.appendChild(emailListCard);
+  }
+
+  // 3. Interactive Email Composer Card (Account switcher, editable To/Subject/Body, Send/Copy/Discard)
+  if (mode === 'email_compose') {
+    const composeCard = document.createElement('div');
+    composeCard.className = 'email-compose-card';
+
+    // Header with Title & Account Switcher
+    const compHeader = document.createElement('div');
+    compHeader.className = 'email-compose-header';
+
+    const titleGroup = document.createElement('div');
+    titleGroup.className = 'email-compose-title';
+    titleGroup.innerHTML = `<span>${escapeHtml(titleText || 'Email Composer')}</span>`;
+
+    // Account pill selector
+    let currentAccount = (data.account || 'personal').toLowerCase();
+    const accountSelector = document.createElement('div');
+    accountSelector.className = 'email-account-toggle';
+
+    const pillPersonal = document.createElement('button');
+    pillPersonal.type = 'button';
+    pillPersonal.className = 'account-toggle-btn' + (currentAccount === 'personal' ? ' active personal' : '');
+    pillPersonal.textContent = 'Personal';
+
+    const pillWork = document.createElement('button');
+    pillWork.type = 'button';
+    pillWork.className = 'account-toggle-btn' + (currentAccount === 'work' ? ' active work' : '');
+    pillWork.textContent = 'Work';
+
+    pillPersonal.addEventListener('click', () => {
+      currentAccount = 'personal';
+      pillPersonal.className = 'account-toggle-btn active personal';
+      pillWork.className = 'account-toggle-btn';
+    });
+
+    pillWork.addEventListener('click', () => {
+      currentAccount = 'work';
+      pillWork.className = 'account-toggle-btn active work';
+      pillPersonal.className = 'account-toggle-btn';
+    });
+
+    accountSelector.appendChild(pillPersonal);
+    accountSelector.appendChild(pillWork);
+
+    compHeader.appendChild(titleGroup);
+    compHeader.appendChild(accountSelector);
+    composeCard.appendChild(compHeader);
+
+    // Form fields: To, Subject, Body
+    const formContainer = document.createElement('div');
+    formContainer.className = 'email-compose-fields';
+
+    // Field: To
+    const toRow = document.createElement('div');
+    toRow.className = 'email-field-row';
+    toRow.innerHTML = `<label class="email-field-label">To:</label>`;
+    const toInput = document.createElement('input');
+    toInput.type = 'text';
+    toInput.className = 'email-field-input';
+    toInput.value = data.to || '';
+    toInput.placeholder = 'recipient@example.com';
+    toRow.appendChild(toInput);
+    formContainer.appendChild(toRow);
+
+    // Field: Subject
+    const subRow = document.createElement('div');
+    subRow.className = 'email-field-row';
+    subRow.innerHTML = `<label class="email-field-label">Subject:</label>`;
+    const subInput = document.createElement('input');
+    subInput.type = 'text';
+    subInput.className = 'email-field-input';
+    subInput.value = data.subject || '';
+    subInput.placeholder = 'Subject line';
+    subRow.appendChild(subInput);
+    formContainer.appendChild(subRow);
+
+    // Field: Body
+    const bodyArea = document.createElement('textarea');
+    bodyArea.className = 'email-compose-textarea';
+    bodyArea.value = data.body || '';
+    bodyArea.placeholder = 'Write your email here...';
+    bodyArea.spellcheck = false;
+    formContainer.appendChild(bodyArea);
+
+    composeCard.appendChild(formContainer);
+
+    // Action buttons: Send, Copy, Discard
+    const actionRow = document.createElement('div');
+    actionRow.className = 'email-compose-actions';
+
+    // Extract ticket id if provided
+    let ticketId = data.ticket_id || '';
+    if (!ticketId && Array.isArray(data.actions)) {
+      for (const act of data.actions) {
+        if (act.payload && act.payload.includes('confirm: send_email ')) {
+          ticketId = act.payload.split('confirm: send_email ')[1].trim();
+          break;
+        }
+      }
+    }
+
+    const btnSend = document.createElement('button');
+    btnSend.className = 'btn btn-primary email-btn-send';
+    btnSend.innerHTML = `<span>Send Email</span>`;
+    btnSend.addEventListener('click', () => {
+      btnSend.disabled = true;
+      btnSend.textContent = 'Sending...';
+
+      const payloadObj = {
+        ticket_id: ticketId,
+        account: currentAccount,
+        to: toInput.value.trim(),
+        subject: subInput.value.trim(),
+        body: bodyArea.value.trim(),
+      };
+
+      input.value = `confirm: send_email ${JSON.stringify(payloadObj)}`;
+      submitTask();
+    });
+
+    const btnCopy = document.createElement('button');
+    btnCopy.className = 'btn btn-secondary';
+    btnCopy.textContent = 'Copy Draft';
+    btnCopy.addEventListener('click', () => {
+      const fullText = `To: ${toInput.value}\nSubject: ${subInput.value}\n\n${bodyArea.value}`;
+      navigator.clipboard.writeText(fullText);
+      btnCopy.textContent = 'Copied!';
+      setTimeout(() => { btnCopy.textContent = 'Copy Draft'; }, 1500);
+    });
+
+    const btnDiscard = document.createElement('button');
+    btnDiscard.className = 'btn btn-danger';
+    btnDiscard.textContent = 'Discard';
+    btnDiscard.addEventListener('click', () => {
+      composeCard.remove();
+    });
+
+    actionRow.appendChild(btnSend);
+    actionRow.appendChild(btnCopy);
+    actionRow.appendChild(btnDiscard);
+    composeCard.appendChild(actionRow);
+
+    bubble.appendChild(composeCard);
   }
 
   // 3. Confirm Widget (file deletions, system actions)

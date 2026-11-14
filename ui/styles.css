@@ -648,3 +648,311 @@ body {
   color: #f87171;
   background: rgba(239, 68, 68, 0.14);
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Interactive Email Cards & Composer
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Email List Card (Inbox Stream) ── */
+.email-list-card {
+  width: 100%;
+  background: #111114;
+  border: 1px solid #23242a;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.email-card-header {
+  padding: 8px 12px;
+  background: #16161a;
+  border-bottom: 1px solid #23242a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.email-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.email-card-title .email-icon {
+  color: #38bdf8;
+  font-weight: 800;
+}
+
+.email-card-badge {
+  font-size: 11px;
+  color: #64748b;
+  font-family: monospace;
+}
+
+.email-items-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.email-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid #1a1a1f;
+  transition: background 0.12s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.email-item:last-child {
+  border-bottom: none;
+}
+
+.email-item:hover {
+  background: #17171c;
+}
+
+.email-item.unread {
+  border-left: 3px solid #38bdf8;
+  background: rgba(56, 189, 248, 0.03);
+}
+
+.email-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.email-item-sender-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.email-pill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+
+.email-badge-personal {
+  background: rgba(37, 99, 235, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
+}
+
+.email-badge-work {
+  background: rgba(124, 58, 237, 0.16);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
+}
+
+.email-sender {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.email-date {
+  font-size: 11px;
+  color: #64748b;
+  flex-shrink: 0;
+  font-family: monospace;
+}
+
+.email-subject {
+  font-size: 13px;
+  color: #e2e8f0;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.email-snippet {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.email-item.expanded .email-snippet {
+  white-space: normal;
+  color: #cbd5e1;
+}
+
+.email-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.email-action-btn {
+  background: #1e1e24;
+  border: 1px solid #2f3037;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.email-action-btn:hover {
+  background: #2a2b34;
+  color: #f8fafc;
+  border-color: #475569;
+}
+
+.email-empty-state {
+  padding: 16px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}
+
+/* ── Email Composer Card ── */
+.email-compose-card {
+  width: 100%;
+  background: #111114;
+  border: 1px solid #282932;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+}
+
+.email-compose-header {
+  padding: 8px 12px;
+  background: #16161a;
+  border-bottom: 1px solid #23242a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.email-compose-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #cbd5e1;
+}
+
+.email-account-toggle {
+  display: flex;
+  background: #1b1b20;
+  border: 1px solid #2a2b33;
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.account-toggle-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.account-toggle-btn.active.personal {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.account-toggle-btn.active.work {
+  background: #7c3aed;
+  color: #ffffff;
+}
+
+.email-compose-fields {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.email-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #16161a;
+  border: 1px solid #25262d;
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+.email-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  width: 55px;
+  flex-shrink: 0;
+}
+
+.email-field-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #f1f5f9;
+  font-size: 13.5px;
+  outline: none;
+  font-family: inherit;
+}
+
+.email-compose-textarea {
+  width: 100%;
+  min-height: 120px;
+  max-height: 240px;
+  background: #16161a;
+  border: 1px solid #25262d;
+  border-radius: 6px;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: #f1f5f9;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.12s ease;
+}
+
+.email-compose-textarea:focus,
+.email-field-row:focus-within {
+  border-color: #3b82f6;
+}
+
+.email-compose-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #141418;
+  border-top: 1px solid #23242a;
+}
