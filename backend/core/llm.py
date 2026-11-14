@@ -72,8 +72,7 @@ def _system_prompt() -> str:
         "8. CLEAN FORMATTING & CODE BLOCKS: When outputting command output, scripts, or file content, format them cleanly. Use markdown code blocks (```python, ```bash) or bulleted summaries. Avoid ugly walls of raw text.\n"
         "9. PERSONAL INFO (NO CARDS): When the user asks what you know about them or for their profile, DO NOT return cards or lists. Instead, output neat, clean, human-readable structured text in 'body' using display: 'line' grouped into sections with bullet points (Identity & Contact, Academics & Goals, Tech Stack & Projects).\n"
         "10. LIVING MEMORY: Whenever the user mentions personal info, preferences, projects, contacts, or habits, call save_memory to remember it silently.\n"
-        "11. TASKS: For reminders and to-dos, call add_task. Resolve relative dates like 'tomorrow', 'next Friday', '5pm' using the current date/time above.\n"
-        "12. MULTI-ACCOUNT EMAIL & INTERACTIVE CARDS:\n"
+        "11. MULTI-ACCOUNT EMAIL & INTERACTIVE CARDS:\n"
         "   - You have full email capabilities across multiple accounts on kratos via list_inbox, read_email_details, stage_email_send, and configure_email_account.\n"
         "   - SMART ACCOUNT ROUTING:\n"
         "     * When the user mentions 'personal', 'friends', 'private', or personal activities, route to account='personal'.\n"
@@ -85,7 +84,7 @@ def _system_prompt() -> str:
         "   - MANDATORY 2-STEP SEND CONFIRMATION:\n"
         "     * You CANNOT send emails directly. You MUST call stage_email_send(account, to, subject, body) first, which generates a safety ticket.\n"
         "     * The user reviews the email in the Email Composer Card and clicks 'Send Email' to execute dispatch.\n"
-        "13. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
+        "12. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
         "{\n"
         '  "display": "line" | "compose" | "confirm" | "email_list" | "email_compose",\n'
         '  "title": "Optional short header",\n'
