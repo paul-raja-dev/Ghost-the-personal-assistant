@@ -28,28 +28,28 @@ DEFAULT_ACCOUNTS_CONFIG = {
     "accounts": {
         "personal": {
             "display_name": "Personal",
-            "email": "paulraja.creator@gmail.com",
+            "email": "user_personal@example.com",
             "provider": "gmail_imap",
             "smtp_host": "smtp.gmail.com",
             "smtp_port": 465,
             "imap_host": "imap.gmail.com",
             "imap_port": 993,
-            "username": "paulraja.creator@gmail.com",
+            "username": "user_personal@example.com",
             "secret_env_var": "GMAIL_PERSONAL_APP_PASSWORD",
         },
         "work": {
             "display_name": "Professional",
-            "email": "paul.work@example.com",
+            "email": "user_work@example.com",
             "provider": "gmail_imap",
             "smtp_host": "smtp.gmail.com",
             "smtp_port": 465,
             "imap_host": "imap.gmail.com",
             "imap_port": 993,
-            "username": "paul.work@example.com",
+            "username": "user_work@example.com",
             "secret_env_var": "GMAIL_WORK_APP_PASSWORD",
         },
     },
-    "default_account": "personal",
+    "default_account": "work",
 }
 
 
@@ -91,11 +91,11 @@ def save_email_accounts(config_data: Dict[str, Any]) -> bool:
 
 def _resolve_account_key(account_str: str, config_data: Dict[str, Any]) -> Optional[str]:
     """Resolve an account key or alias to an actual configured account identifier."""
-    if not account_str:
-        return config_data.get("default_account", "personal")
-
-    key = account_str.strip().lower()
     accounts = config_data.get("accounts", {})
+    if not account_str:
+        account_str = config_data.get("default_account", "work")
+
+    key = str(account_str).strip().lower()
 
     if key in accounts:
         return key
@@ -117,6 +117,9 @@ def _resolve_account_key(account_str: str, config_data: Dict[str, Any]) -> Optio
         email_addr = v.get("email", "").lower()
         if key in disp or key in email_addr:
             return k
+
+    if accounts:
+        return next(iter(accounts.keys()))
 
     return None
 

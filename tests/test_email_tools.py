@@ -54,7 +54,7 @@ class TestEmailTools(unittest.TestCase):
         self.assertIn("accounts", cfg)
         self.assertIn("personal", cfg["accounts"])
         self.assertIn("work", cfg["accounts"])
-        self.assertEqual(cfg["accounts"]["personal"]["email"], "paulraja.creator@gmail.com")
+        self.assertEqual(cfg["accounts"]["personal"]["email"], "user_personal@example.com")
 
         # Test alias resolution
         self.assertEqual(email_tools._resolve_account_key("personal", cfg), "personal")
@@ -63,6 +63,8 @@ class TestEmailTools(unittest.TestCase):
         self.assertEqual(email_tools._resolve_account_key("job", cfg), "work")
         self.assertEqual(email_tools._resolve_account_key("career", cfg), "work")
         self.assertEqual(email_tools._resolve_account_key("Professional", cfg), "work")
+        # Test empty account defaults to configured default
+        self.assertEqual(email_tools._resolve_account_key("", cfg), "work")
 
     def test_stage_email_send(self):
         """Verify staging creates safety ticket with send/copy/discard actions."""
@@ -107,7 +109,7 @@ class TestEmailTools(unittest.TestCase):
             self.assertIn("colleague@example.com", send_res["message"])
 
             # Verify SMTP login and send_message was called
-            mock_smtp.login.assert_called_once_with("paulraja.creator@gmail.com", "test-password-123")
+            mock_smtp.login.assert_called_once_with("user_personal@example.com", "test-password-123")
             self.assertEqual(mock_smtp.send_message.call_count, 1)
 
             # Ticket must be deleted
@@ -178,7 +180,7 @@ class TestEmailTools(unittest.TestCase):
             # Mock fetch response with sample raw email
             raw_email = (
                 b"From: Alice <alice@example.com>\r\n"
-                b"To: paulraja.creator@gmail.com\r\n"
+                b"To: user_personal@example.com\r\n"
                 b"Subject: Meeting Notes & Action Items\r\n"
                 b"Date: Thu, 14 Nov 2026 18:30:00 +0000\r\n"
                 b"Content-Type: text/plain; charset=utf-8\r\n\r\n"
@@ -204,7 +206,7 @@ class TestEmailTools(unittest.TestCase):
 
             raw_email = (
                 b"From: Recruiter <recruiter@tech.com>\r\n"
-                b"To: paulraja.creator@gmail.com\r\n"
+                b"To: user_personal@example.com\r\n"
                 b"Subject: Interview Schedule\r\n"
                 b"Date: Thu, 14 Nov 2026 19:00:00 +0000\r\n"
                 b"Content-Type: text/html; charset=utf-8\r\n\r\n"
