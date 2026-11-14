@@ -1,5 +1,4 @@
 """Central Tools Registry for Ghost."""
-from .tasks import add_task
 from .memory_tools import save_memory, recall_memories, list_all_memories, forget_memory
 from .system_tools import (
     execute_command,
@@ -49,8 +48,6 @@ TOOLS = [
     recall_memories,
     list_all_memories,
     forget_memory,
-    # Tasks
-    add_task,
 ]
 
 __all__ = [
@@ -73,7 +70,6 @@ __all__ = [
     "execute_confirmed_trash",
     "inspect_project",
     "get_system_status",
-    "add_task",
     "save_memory",
     "recall_memories",
     "list_all_memories",
