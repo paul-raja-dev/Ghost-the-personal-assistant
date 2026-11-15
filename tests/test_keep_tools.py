@@ -53,12 +53,12 @@ class TestKeepTools(unittest.TestCase):
         email = keep_tools.get_keep_email()
         self.assertEqual(email, "paulraja.creator@gmail.com")
 
-    def test_missing_token_setup_guidance(self):
+    @patch("tools.keep_tools.get_master_token", return_value=None)
+    def test_missing_token_setup_guidance(self, mock_token):
         """Verify clean setup guidance when master token is not configured."""
-        with patch.dict(os.environ, {}, clear=True):
-            res = keep_tools.list_keep_notes()
-            self.assertEqual(res["status"], "setup_required")
-            self.assertIn("GOOGLE_KEEP_MASTER_TOKEN", res["message"])
+        res = keep_tools.list_keep_notes()
+        self.assertEqual(res["status"], "setup_required")
+        self.assertIn("GOOGLE_KEEP_MASTER_TOKEN", res["message"])
 
     @patch("tools.keep_tools.get_keep_client")
     def test_list_keep_notes_mocked(self, mock_get_client):

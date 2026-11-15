@@ -35,7 +35,19 @@ def setup_keep_token(oauth_token_cookie: str, email: str = ""):
     print(f"[info] Exchanging token for Google account: {email}...")
     try:
         # A dummy android ID is accepted by Google's OAuth endpoint
-        master_token = gpsoauth.exchange_token(email, cookie, "0123456789abcdef")
+        res = gpsoauth.exchange_token(email, cookie, "0123456789abcdef")
+        if not res:
+            print("[error] Token exchange failed: empty response from Google.")
+            return False
+
+        if isinstance(res, dict):
+            if "Error" in res:
+                print(f"[error] Token exchange failed: {res['Error']}")
+                return False
+            master_token = res.get("Token") or res.get("Auth")
+        else:
+            master_token = str(res)
+
         if not master_token or "Error=" in str(master_token):
             print(f"[error] Token exchange failed: {master_token}")
             return False
@@ -49,8 +61,10 @@ def setup_keep_token(oauth_token_cookie: str, email: str = ""):
             with open(env_file, "r", encoding="utf-8") as f:
                 lines = f.readlines()
 
-        new_lines = [l for l in lines if not l.startswith("GOOGLE_KEEP_MASTER_TOKEN=")]
-        new_lines.append(f"GOOGLE_KEEP_MASTER_TOKEN={master_token}\n")
+        new_lines = [l for l in lines if not l.strip().startswith("GOOGLE_KEEP_MASTER_TOKEN=")]
+        if new_lines and not new_lines[-1].endswith("\n"):
+            new_lines[-1] += "\n"
+        new_lines.append(f'GOOGLE_KEEP_MASTER_TOKEN="{master_token}"\n')
 
         with open(env_file, "w", encoding="utf-8") as f:
             f.writelines(new_lines)

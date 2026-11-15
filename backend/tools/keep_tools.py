@@ -60,21 +60,35 @@ def get_keep_email() -> str:
 def get_master_token() -> Optional[str]:
     """Retrieve Google Keep Master Token from environment or .env file."""
     token = os.getenv("GOOGLE_KEEP_MASTER_TOKEN")
-    if token:
-        return token.strip()
+    if not token:
+        env_file = Path("/home/paul/Desktop/Ghost/.env")
+        if env_file.exists():
+            try:
+                with open(env_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("GOOGLE_KEEP_MASTER_TOKEN="):
+                            token = line.split("=", 1)[1].strip().strip('"').strip("'")
+                            break
+            except Exception:
+                pass
 
-    env_file = Path("/home/paul/Desktop/Ghost/.env")
-    if env_file.exists():
+    if not token:
+        return None
+
+    # Handle case where token was saved as dict string e.g. {'Token': 'aas_et/...'}
+    if token.startswith("{") and "Token" in token:
         try:
-            with open(env_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("GOOGLE_KEEP_MASTER_TOKEN="):
-                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        return val.strip()
+            import ast
+            data = ast.literal_eval(token)
+            if isinstance(data, dict):
+                return data.get("Token") or data.get("Auth")
         except Exception:
-            pass
-    return None
+            match = re.search(r"['\"]Token['\"]\s*:\s*['\"]([^'\"]+)['\"]", token)
+            if match:
+                return match.group(1)
+
+    return token.strip()
 
 
 def get_keep_client():
@@ -107,7 +121,7 @@ def get_keep_client():
         try:
             with open(KEEP_STATE_FILE, "r", encoding="utf-8") as f:
                 state = json.load(f)
-            keep.resume(email, master_token, state=state, sync=True)
+            keep.authenticate(email, master_token, state=state, sync=True)
             _keep_client = keep
             return keep, None
         except Exception:
