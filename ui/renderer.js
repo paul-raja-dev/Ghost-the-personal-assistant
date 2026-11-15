@@ -211,7 +211,7 @@ function appendGhostMessage(data) {
   const titleText = data.title || '';
 
   // Main clean formatted text body
-  if (bodyText && mode !== 'email_compose') {
+  if (bodyText && mode !== 'email_compose' && mode !== 'note_card') {
     const textEl = document.createElement('div');
     textEl.className = 'chat-text';
     textEl.innerHTML = formatChatText(bodyText);
@@ -490,6 +490,174 @@ function appendGhostMessage(data) {
     composeCard.appendChild(actionRow);
 
     bubble.appendChild(composeCard);
+  }
+
+  // 4. Google Keep Notes List Card (Stream of sticky notes & checklists synced with mobile)
+  if (mode === 'notes_list') {
+    const notesCard = document.createElement('div');
+    notesCard.className = 'notes-list-card';
+
+    const cardHeader = document.createElement('div');
+    cardHeader.className = 'notes-card-header';
+
+    const headerTitle = document.createElement('div');
+    headerTitle.className = 'notes-card-title';
+    headerTitle.innerHTML = `<span class="notes-keep-icon">#</span> <span>${escapeHtml(titleText || 'Google Keep Notes')}</span>`;
+
+    const notes = Array.isArray(data.notes) ? data.notes : [];
+    const headerMeta = document.createElement('span');
+    headerMeta.className = 'notes-card-badge';
+    headerMeta.textContent = `${notes.length} ${notes.length === 1 ? 'note' : 'notes'} • Synced with Mobile`;
+
+    cardHeader.appendChild(headerTitle);
+    cardHeader.appendChild(headerMeta);
+    notesCard.appendChild(cardHeader);
+
+    const notesGrid = document.createElement('div');
+    notesGrid.className = 'notes-grid';
+
+    if (notes.length === 0) {
+      const emptyNotice = document.createElement('div');
+      emptyNotice.className = 'notes-empty-state';
+      emptyNotice.textContent = 'No Google Keep notes found.';
+      notesGrid.appendChild(emptyNotice);
+    } else {
+      notes.forEach((note) => {
+        const tile = document.createElement('div');
+        const colorClass = note.color ? `note-color-${note.color.toLowerCase()}` : 'note-color-default';
+        tile.className = `note-tile ${colorClass}` + (note.pinned ? ' pinned' : '');
+
+        let itemsHtml = '';
+        if (note.is_checklist && Array.isArray(note.checklist_items)) {
+          const previewItems = note.checklist_items.slice(0, 4);
+          itemsHtml = `<div class="note-checklist-preview">` + previewItems.map(it => `
+            <div class="note-check-item ${it.checked ? 'checked' : ''}">
+              <span class="note-check-box">${it.checked ? '[x]' : '[ ]'}</span>
+              <span class="note-check-text">${escapeHtml(it.text || '')}</span>
+            </div>
+          `).join('') + (note.checklist_items.length > 4 ? `<div class="note-more-items">+${note.checklist_items.length - 4} more</div>` : '') + `</div>`;
+        } else {
+          itemsHtml = `<div class="note-text-snippet">${escapeHtml(note.snippet || note.text || '')}</div>`;
+        }
+
+        tile.innerHTML = `
+          <div class="note-tile-header">
+            <span class="note-tile-title">${escapeHtml(note.title || '(Untitled)')}</span>
+            ${note.pinned ? '<span class="note-pin-badge" title="Pinned Note">[pinned]</span>' : ''}
+          </div>
+          ${itemsHtml}
+          <div class="note-tile-footer">
+            <button class="note-btn-action note-btn-view" title="Open full note">View</button>
+            <button class="note-btn-action note-btn-del" title="Delete note">Delete</button>
+          </div>
+        `;
+
+        const btnView = tile.querySelector('.note-btn-view');
+        if (btnView) {
+          btnView.addEventListener('click', (e) => {
+            e.stopPropagation();
+            input.value = `Read Google Keep note ID ${note.id}`;
+            submitTask();
+          });
+        }
+
+        const btnDel = tile.querySelector('.note-btn-del');
+        if (btnDel) {
+          btnDel.addEventListener('click', (e) => {
+            e.stopPropagation();
+            input.value = `Delete Google Keep note "${note.title}" (ID: ${note.id})`;
+            submitTask();
+          });
+        }
+
+        tile.addEventListener('click', () => {
+          tile.classList.toggle('expanded');
+        });
+
+        notesGrid.appendChild(tile);
+      });
+    }
+
+    notesCard.appendChild(notesGrid);
+    bubble.appendChild(notesCard);
+  }
+
+  // 5. Single Google Keep Note Card (Interactive Sticky Note / Checklist)
+  if (mode === 'note_card') {
+    const singleCard = document.createElement('div');
+    const colorClass = data.color ? `note-color-${data.color.toLowerCase()}` : 'note-color-default';
+    singleCard.className = `single-note-card ${colorClass}` + (data.pinned ? ' pinned' : '');
+
+    const cardHeader = document.createElement('div');
+    cardHeader.className = 'single-note-header';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'single-note-title';
+    titleEl.innerHTML = `<span>${escapeHtml(data.note_title || data.title || 'Google Keep Note')}</span>`;
+
+    const metaBadge = document.createElement('div');
+    metaBadge.className = 'single-note-meta';
+    if (data.pinned) {
+      metaBadge.innerHTML = `<span class="note-pin-badge">[pinned]</span>`;
+    }
+    metaBadge.innerHTML += `<span class="note-sync-tag">Keep Sync</span>`;
+
+    cardHeader.appendChild(titleEl);
+    cardHeader.appendChild(metaBadge);
+    singleCard.appendChild(cardHeader);
+
+    const cardBody = document.createElement('div');
+    cardBody.className = 'single-note-body';
+
+    const checklist = Array.isArray(data.checklist_items) ? data.checklist_items : [];
+    if (data.is_checklist || checklist.length > 0) {
+      const listContainer = document.createElement('div');
+      listContainer.className = 'single-note-checklist';
+      checklist.forEach((item, idx) => {
+        const itemRow = document.createElement('div');
+        itemRow.className = 'single-check-row' + (item.checked ? ' checked' : '');
+        itemRow.innerHTML = `
+          <input type="checkbox" class="single-check-input" id="chk_${idx}" ${item.checked ? 'checked' : ''} />
+          <label for="chk_${idx}" class="single-check-label">${escapeHtml(item.text || '')}</label>
+        `;
+        const chkBox = itemRow.querySelector('.single-check-input');
+        chkBox.addEventListener('change', () => {
+          itemRow.classList.toggle('checked', chkBox.checked);
+        });
+        listContainer.appendChild(itemRow);
+      });
+      cardBody.appendChild(listContainer);
+    } else {
+      const textBlock = document.createElement('div');
+      textBlock.className = 'single-note-text';
+      textBlock.innerHTML = formatChatText(data.text || bodyText || '');
+      cardBody.appendChild(textBlock);
+    }
+
+    singleCard.appendChild(cardBody);
+
+    // Actions
+    const actionRow = document.createElement('div');
+    actionRow.className = 'single-note-actions';
+
+    const btnCopy = document.createElement('button');
+    btnCopy.className = 'btn btn-secondary';
+    btnCopy.textContent = 'Copy Content';
+    btnCopy.addEventListener('click', () => {
+      let copyText = (data.note_title || data.title || '') + '\n\n';
+      if (checklist.length > 0) {
+        copyText += checklist.map(c => `[${c.checked ? 'x' : ' '}] ${c.text}`).join('\n');
+      } else {
+        copyText += data.text || bodyText || '';
+      }
+      navigator.clipboard.writeText(copyText.trim());
+      btnCopy.textContent = 'Copied!';
+      setTimeout(() => { btnCopy.textContent = 'Copy Content'; }, 1500);
+    });
+
+    actionRow.appendChild(btnCopy);
+    singleCard.appendChild(actionRow);
+    bubble.appendChild(singleCard);
   }
 
   // 3. Confirm Widget (file deletions, system actions)
