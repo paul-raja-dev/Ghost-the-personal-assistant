@@ -21,8 +21,22 @@ from .email_tools import (
     configure_email_account,
     execute_confirmed_send,
 )
+from .keep_tools import (
+    list_keep_notes,
+    read_keep_note,
+    create_keep_note,
+    update_keep_note,
+    stage_keep_note_deletion,
+    execute_confirmed_keep_deletion,
+)
 
 TOOLS = [
+    # Google Keep Notes & Mobile Sync
+    list_keep_notes,
+    read_keep_note,
+    create_keep_note,
+    update_keep_note,
+    stage_keep_note_deletion,
     # Multi-Account Email
     list_inbox,
     read_email_details,
@@ -52,6 +66,12 @@ TOOLS = [
 
 __all__ = [
     "TOOLS",
+    "list_keep_notes",
+    "read_keep_note",
+    "create_keep_note",
+    "update_keep_note",
+    "stage_keep_note_deletion",
+    "execute_confirmed_keep_deletion",
     "list_inbox",
     "read_email_details",
     "stage_email_send",

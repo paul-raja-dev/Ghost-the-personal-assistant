@@ -1,6 +1,12 @@
 """Legacy wrapper redirecting to backend.tools package."""
 from tools import (
     TOOLS,
+    list_keep_notes,
+    read_keep_note,
+    create_keep_note,
+    update_keep_note,
+    stage_keep_note_deletion,
+    execute_confirmed_keep_deletion,
     list_inbox,
     read_email_details,
     stage_email_send,
@@ -17,6 +23,12 @@ from tools import (
 
 __all__ = [
     "TOOLS",
+    "list_keep_notes",
+    "read_keep_note",
+    "create_keep_note",
+    "update_keep_note",
+    "stage_keep_note_deletion",
+    "execute_confirmed_keep_deletion",
     "list_inbox",
     "read_email_details",
     "stage_email_send",
