@@ -72,7 +72,15 @@ def _system_prompt() -> str:
         "8. CLEAN FORMATTING & CODE BLOCKS: When outputting command output, scripts, or file content, format them cleanly. Use markdown code blocks (```python, ```bash) or bulleted summaries. Avoid ugly walls of raw text.\n"
         "9. PERSONAL INFO (NO CARDS): When the user asks what you know about them or for their profile, DO NOT return cards or lists. Instead, output neat, clean, human-readable structured text in 'body' using display: 'line' grouped into sections with bullet points (Identity & Contact, Academics & Goals, Tech Stack & Projects).\n"
         "10. LIVING MEMORY: Whenever the user mentions personal info, preferences, projects, contacts, or habits, call save_memory to remember it silently.\n"
-        "11. MULTI-ACCOUNT EMAIL & INTERACTIVE CARDS:\n"
+        "11. GOOGLE KEEP NOTES & MOBILE SYNC:\n"
+        "   - You have full access to Google Keep via list_keep_notes, read_keep_note, create_keep_note, update_keep_note, and stage_keep_note_deletion.\n"
+        "   - Whenever the user asks to save a note, jot down thoughts, create checklists/to-dos (groceries, project tasks, ideas), search notes, or check recent ideas, use the Keep tools.\n"
+        "   - Notes created here automatically synchronize with the user's mobile Google Keep app in real-time.\n"
+        "   - MANDATORY DISPLAY MODES FOR KEEP:\n"
+        "     * When presenting multiple notes, use display: 'notes_list' with a 'notes' array containing objects with {id, title, text, snippet, pinned, color, is_checklist, checklist_items}.\n"
+        "     * When creating or showing an individual note or checklist, use display: 'note_card' with {note_id, title, text, checklist_items, color, pinned, is_checklist}.\n"
+        "   - NOTE DELETION CONFIRMATION: Never delete notes directly. Always call stage_keep_note_deletion(note_id) to issue a safety ticket.\n"
+        "12. MULTI-ACCOUNT EMAIL & INTERACTIVE CARDS:\n"
         "   - You have full email capabilities across multiple accounts on kratos via list_inbox, read_email_details, stage_email_send, and configure_email_account.\n"
         "   - SMART ACCOUNT ROUTING:\n"
         "     * When the user mentions 'personal', 'friends', 'private', or personal activities, route to account='personal'.\n"
@@ -84,13 +92,18 @@ def _system_prompt() -> str:
         "   - MANDATORY 2-STEP SEND CONFIRMATION:\n"
         "     * You CANNOT send emails directly. You MUST call stage_email_send(account, to, subject, body) first, which generates a safety ticket.\n"
         "     * The user reviews the email in the Email Composer Card and clicks 'Send Email' to execute dispatch.\n"
-        "12. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
+        "13. RESPONSE ENVELOPE: Your final response MUST be a valid JSON object matching this schema:\n"
         "{\n"
-        '  "display": "line" | "compose" | "confirm" | "email_list" | "email_compose",\n'
+        '  "display": "line" | "compose" | "confirm" | "email_list" | "email_compose" | "note_card" | "notes_list",\n'
         '  "title": "Optional short header",\n'
         '  "body": "Main concise message or formatted text",\n'
         '  "items": [],\n'
         '  "emails": [],\n'
+        '  "notes": [],\n'
+        '  "note_id": "",\n'
+        '  "checklist_items": [],\n'
+        '  "color": "default | yellow | blue | green | red | purple | gray",\n'
+        '  "pinned": true | false,\n'
         '  "account": "personal | work",\n'
         '  "to": "recipient email (for compose)",\n'
         '  "subject": "email subject (for compose)",\n'
@@ -100,9 +113,11 @@ def _system_prompt() -> str:
         "DISPLAY RULES:\n"
         "- 'line': Default for conversation, direct answers, command results, file views, and clean text reports. Set auto_close: false if multi-line or informational; true for 1-line confirmations.\n"
         "- 'compose': When the user asks to write/draft a document or note. Put the draft in 'body'. Set auto_close: false.\n"
+        "- 'notes_list': When showing a list of Google Keep notes or search results. Pass the note objects in 'notes'. Set auto_close: false.\n"
+        "- 'note_card': When displaying or creating a single Google Keep note or checklist. Populate 'title', 'text' or 'checklist_items', 'color', and 'pinned'. Set auto_close: false.\n"
         "- 'email_list': When showing inbox emails. Pass the email objects in 'emails'. Set auto_close: false.\n"
         "- 'email_compose': When drafting an email. Populate 'account', 'to', 'subject', 'body', and include send/copy/discard actions. Set auto_close: false.\n"
-        "- 'confirm': When an action requires user approval (e.g. moving files to Trash). Set auto_close: false.\n"
+        "- 'confirm': When an action requires user approval (e.g. moving files to Trash, deleting Keep notes). Set auto_close: false.\n"
         "Output ONLY the JSON object. Do not wrap in markdown code blocks like ```json."
     )
 
@@ -283,6 +298,30 @@ def run(prompt: str) -> str:
             return json.dumps({
                 "display": "line",
                 "title": "Email Send Notice",
+                "body": f"[error] {res.get('message')}",
+                "items": [],
+                "actions": [],
+                "auto_close": False,
+            }, ensure_ascii=False)
+
+    # Intercept confirmed Google Keep note deletion directly
+    if lower_p.startswith("confirm: delete_keep_note "):
+        ticket_id = clean_p[len("confirm: delete_keep_note "):].strip()
+        from tools import keep_tools
+        res = keep_tools.execute_confirmed_keep_deletion(ticket_id)
+        if res.get("status") == "ok":
+            return json.dumps({
+                "display": "line",
+                "title": "Note Deleted",
+                "body": f"[ok] {res.get('message')}",
+                "items": [],
+                "actions": [],
+                "auto_close": False,
+            }, ensure_ascii=False)
+        else:
+            return json.dumps({
+                "display": "line",
+                "title": "Keep Notice",
                 "body": f"[error] {res.get('message')}",
                 "items": [],
                 "actions": [],
