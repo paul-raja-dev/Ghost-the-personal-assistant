@@ -237,6 +237,53 @@ class TestKeepTools(unittest.TestCase):
         self.assertIn("[ok]", data["body"])
         self.assertIn("Obsolete Idea", data["body"])
 
+    def test_normalize_checklist_items(self):
+        """Verify normalization handles strings, json, and lists without character splitting."""
+        # Single string must not become individual letters
+        res_single = keep_tools._normalize_checklist_items("Call Sister tomorrow")
+        self.assertEqual(res_single, [("Call Sister tomorrow", False)])
+
+        # Multi-line string with bullets
+        res_lines = keep_tools._normalize_checklist_items("1. Feature A\n2. Feature B\n- Feature C")
+        self.assertEqual(res_lines, [("Feature A", False), ("Feature B", False), ("Feature C", False)])
+
+        # JSON string
+        res_json = keep_tools._normalize_checklist_items('["Task 1", "Task 2"]')
+        self.assertEqual(res_json, [("Task 1", False), ("Task 2", False)])
+
+        # Dict items
+        res_dicts = keep_tools._normalize_checklist_items([{"text": "Task A", "checked": True}, {"text": "Task B"}])
+        self.assertEqual(res_dicts, [("Task A", True), ("Task B", False)])
+
+    @patch("tools.keep_tools.get_keep_client")
+    def test_create_keep_note_string_does_not_split_chars(self, mock_get_client):
+        """Verify single string checklist_items creates 1 item, not character-by-character."""
+        mock_keep = MagicMock()
+        mock_get_client.return_value = (mock_keep, None)
+
+        mock_list = MagicMock()
+        mock_list.id = "new_list_str"
+        mock_list.text = "Call Sister tomorrow"
+        mock_list.pinned = False
+        mock_keep.createList.return_value = mock_list
+
+        res = keep_tools.create_keep_note(
+            title="Reminder: Call Sister",
+            checklist_items="Call Sister tomorrow",
+        )
+        self.assertEqual(res["status"], "ok")
+        self.assertEqual(res["checklist_items"], [{"text": "Call Sister tomorrow", "checked": False}])
+        mock_keep.createList.assert_called_once_with("Reminder: Call Sister", [("Call Sister tomorrow", False)])
+
+    def test_create_keep_note_schema_array_type(self):
+        """Verify OpenAI tool schema generates array type with string items for checklist_items."""
+        from tools import schemas
+        schema = schemas.function_to_openai_schema(keep_tools.create_keep_note)
+        props = schema["function"]["parameters"]["properties"]
+        self.assertEqual(props["checklist_items"]["type"], "array")
+        self.assertEqual(props["checklist_items"]["items"]["type"], "string")
+        self.assertIn("to-do checklist", props["checklist_items"]["description"])
+
 
 if __name__ == "__main__":
     unittest.main()
