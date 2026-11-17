@@ -530,12 +530,16 @@ function appendGhostMessage(data) {
         let itemsHtml = '';
         if (note.is_checklist && Array.isArray(note.checklist_items)) {
           const previewItems = note.checklist_items.slice(0, 4);
-          itemsHtml = `<div class="note-checklist-preview">` + previewItems.map(it => `
-            <div class="note-check-item ${it.checked ? 'checked' : ''}">
-              <span class="note-check-box">${it.checked ? '[x]' : '[ ]'}</span>
-              <span class="note-check-text">${escapeHtml(it.text || '')}</span>
-            </div>
-          `).join('') + (note.checklist_items.length > 4 ? `<div class="note-more-items">+${note.checklist_items.length - 4} more</div>` : '') + `</div>`;
+          itemsHtml = `<div class="note-checklist-preview">` + previewItems.map(it => {
+            const txt = typeof it === 'string' ? it : (it && it.text ? it.text : '');
+            const chk = typeof it === 'object' && it !== null && Boolean(it.checked);
+            return `
+              <div class="note-check-item ${chk ? 'checked' : ''}">
+                <span class="note-check-box">${chk ? '[x]' : '[ ]'}</span>
+                <span class="note-check-text">${escapeHtml(txt)}</span>
+              </div>
+            `;
+          }).join('') + (note.checklist_items.length > 4 ? `<div class="note-more-items">+${note.checklist_items.length - 4} more</div>` : '') + `</div>`;
         } else {
           itemsHtml = `<div class="note-text-snippet">${escapeHtml(note.snippet || note.text || '')}</div>`;
         }
@@ -614,11 +618,13 @@ function appendGhostMessage(data) {
       const listContainer = document.createElement('div');
       listContainer.className = 'single-note-checklist';
       checklist.forEach((item, idx) => {
+        const itemText = typeof item === 'string' ? item : (item && item.text ? item.text : '');
+        const isChecked = typeof item === 'object' && item !== null && Boolean(item.checked);
         const itemRow = document.createElement('div');
-        itemRow.className = 'single-check-row' + (item.checked ? ' checked' : '');
+        itemRow.className = 'single-check-row' + (isChecked ? ' checked' : '');
         itemRow.innerHTML = `
-          <input type="checkbox" class="single-check-input" id="chk_${idx}" ${item.checked ? 'checked' : ''} />
-          <label for="chk_${idx}" class="single-check-label">${escapeHtml(item.text || '')}</label>
+          <input type="checkbox" class="single-check-input" id="chk_${idx}" ${isChecked ? 'checked' : ''} />
+          <label for="chk_${idx}" class="single-check-label">${escapeHtml(itemText)}</label>
         `;
         const chkBox = itemRow.querySelector('.single-check-input');
         chkBox.addEventListener('change', () => {
@@ -646,7 +652,11 @@ function appendGhostMessage(data) {
     btnCopy.addEventListener('click', () => {
       let copyText = (data.note_title || data.title || '') + '\n\n';
       if (checklist.length > 0) {
-        copyText += checklist.map(c => `[${c.checked ? 'x' : ' '}] ${c.text}`).join('\n');
+        copyText += checklist.map(c => {
+          const txt = typeof c === 'string' ? c : (c && c.text ? c.text : '');
+          const chk = typeof c === 'object' && c !== null && Boolean(c.checked);
+          return `[${chk ? 'x' : ' '}] ${txt}`;
+        }).join('\n');
       } else {
         copyText += data.text || bodyText || '';
       }
