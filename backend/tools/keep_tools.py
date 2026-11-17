@@ -8,7 +8,7 @@ from pathlib import Path
 import re
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 import uuid
 
 # Configuration paths
@@ -39,6 +39,53 @@ COLOR_MAP = {
 
 def _ensure_config_dir():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _normalize_checklist_items(items: Any) -> List[Tuple[str, bool]]:
+    """Normalize input checklist items into a list of (item_text, is_checked) tuples.
+    Prevents single-string character iteration and parses JSON or multi-line strings cleanly.
+    """
+    if not items:
+        return []
+
+    # If passed as raw JSON string or stringified list e.g. '["Item 1", "Item 2"]'
+    if isinstance(items, str):
+        s = items.strip()
+        if not s:
+            return []
+        if (s.startswith("[") and s.endswith("]")) or (s.startswith("{") and s.endswith("}")):
+            try:
+                parsed = json.loads(s)
+                return _normalize_checklist_items(parsed)
+            except Exception:
+                pass
+        # If passed as multi-line string with bullet points or numbers
+        if "\n" in s:
+            lines = [re.sub(r"^[\s*\-•\d.]+", "", line).strip() for line in s.splitlines()]
+            return [(line, False) for line in lines if line]
+        # Single string item (e.g. "Call Sister tomorrow")
+        return [(s, False)]
+
+    # If passed as a list/iterable
+    if isinstance(items, (list, tuple)):
+        result = []
+        for it in items:
+            if isinstance(it, dict):
+                t = str(it.get("text", "")).strip()
+                c = bool(it.get("checked", False))
+                if t:
+                    result.append((t, c))
+            elif isinstance(it, str):
+                s = it.strip()
+                if s:
+                    result.append((s, False))
+            elif it is not None:
+                s = str(it).strip()
+                if s:
+                    result.append((s, False))
+        return result
+
+    return [(str(items).strip(), False)]
 
 
 def get_keep_email() -> str:
@@ -300,10 +347,10 @@ def create_keep_note(
         import gkeepapi
 
         clean_title = (title or "").strip()
-        is_checklist = bool(checklist_items and len(checklist_items) > 0)
+        items_tuples = _normalize_checklist_items(checklist_items)
+        is_checklist = bool(items_tuples and len(items_tuples) > 0)
 
         if is_checklist:
-            items_tuples = [(str(it).strip(), False) for it in checklist_items if str(it).strip()]
             note = keep.createList(clean_title, items_tuples)
         else:
             note = keep.createNote(clean_title, (text or "").strip())
@@ -327,6 +374,7 @@ def create_keep_note(
         except Exception:
             pass
 
+        checklist_formatted = [{"text": t, "checked": c} for t, c in items_tuples] if is_checklist else []
         return {
             "status": "ok",
             "note_id": str(note.id),
@@ -334,6 +382,7 @@ def create_keep_note(
             "text": note.text,
             "pinned": bool(note.pinned),
             "is_checklist": is_checklist,
+            "checklist_items": checklist_formatted,
             "message": f"Note '{clean_title}' saved to Google Keep and synced to mobile.",
         }
     except Exception as exc:
@@ -366,11 +415,12 @@ def update_keep_note(
             return {"status": "error", "message": f"Note '{note_id}' not found."}
 
         is_checklist = isinstance(note, gkeepapi.node.List)
+        new_items = _normalize_checklist_items(add_items)
 
-        if is_checklist and add_items:
-            for it in add_items:
-                if str(it).strip():
-                    note.add(str(it).strip(), False)
+        if is_checklist and new_items:
+            for it_text, it_checked in new_items:
+                if it_text:
+                    note.add(it_text, it_checked)
         elif text:
             if append and note.text:
                 note.text = f"{note.text}\n{text.strip()}"
