@@ -887,6 +887,12 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
+  // Ctrl+R or Cmd+R to reload UI
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
+    window.location.reload();
+    return;
+  }
+
   if (e.key === 'Escape') {
     if (!historyDrawer.classList.contains('hidden')) {
       historyDrawer.classList.add('hidden');
